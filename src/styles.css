@@ -1,0 +1,1843 @@
+/* Fermata: black stage, glowing gradient tiles, dot-matrix numbers.
+   Every gradient below is rebuilt from colours sampled off the two reference designs. */
+
+:root {
+  color-scheme: dark;
+
+  /* Stage and tiles */
+  --black: #000;
+  --tile: #1c1c1c;
+  --tile-edge: #282828;
+  --stroke: #3a3a3a;
+
+  /* Type */
+  --ink: #f4f4f4;
+  --ink-2: rgba(244, 244, 244, 0.62);
+  --ink-3: rgba(244, 244, 244, 0.38);
+  --paper: #fbfbfb;
+
+  /* Signals (from the references) */
+  --marker: #e5ec7e; /* yellow tick / triangle */
+  --good: #a7d99e; /* "ON" green */
+  --good-soft: rgba(167, 217, 158, 0.16);
+  --near: #f2851c; /* "+" orange */
+  --danger: #f02e77; /* "Pull" rose */
+  --accent: #fe196b; /* "38" hot pink */
+  --select: #6fbdeb; /* "Ithem" blue */
+
+  /* Canvas tokens (lane, ladders, trails) */
+  --bg: #141414;
+  --surface: #1f1f1f;
+  --line: #2e2e2e;
+  --lane-bar: rgba(244, 244, 244, 0.16);
+  --lane-active: #e5ec7e;
+
+  --r-tile: 30px;
+  --r-pill: 999px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --font: "Inter Tight", system-ui, -apple-system, sans-serif;
+  --dots: "Doto", ui-monospace, monospace;
+}
+
+/* ---------- reference gradients ---------- */
+/* Pink "Reminder" bloom: plum core → hot pink ring → lilac */
+.g-bloom {
+  background:
+    radial-gradient(ellipse 30% 22% at 50% 42%, #440f33 0%, rgba(68, 15, 51, 0.92) 40%, rgba(68, 15, 51, 0) 100%),
+    radial-gradient(ellipse 58% 44% at 50% 44%, #ab275f 0%, #c53273 38%, #be2e6a 52%, rgba(190, 46, 106, 0) 100%),
+    #c998bd;
+}
+/* Sage "sensor": near-black core → slate → sage */
+.g-sage {
+  background: radial-gradient(ellipse 62% 54% at 50% 50%, #02030c 0%, #090917 34%, #1d242d 52%, #445453 76%, #769687 100%);
+}
+/* "Average Glucose": mauve → rose */
+.g-glucose {
+  background:
+    radial-gradient(ellipse 70% 80% at 10% 0%, rgba(40, 26, 40, 0.55) 0%, rgba(40, 26, 40, 0) 70%),
+    linear-gradient(160deg, #826a7b 0%, #a06d7a 45%, #b96f76 75%, #c57278 100%);
+}
+/* "Time in range": graphite core, sage rim */
+.g-range {
+  background: radial-gradient(ellipse 72% 62% at 50% 62%, #1f2029 0%, #2b3038 42%, #4e615d 82%, #6c8780 100%);
+}
+/* "Variability": orchid with a magenta heart */
+.g-vari {
+  background: radial-gradient(ellipse 52% 44% at 68% 52%, #8a2a62 0%, #af779a 46%, #d488b8 100%);
+}
+/* "Vitamin D": deep navy glow */
+.g-vitamin {
+  background: radial-gradient(ellipse 80% 80% at 40% 75%, #081029 0%, #10204f 50%, #213472 100%);
+}
+/* "Spikes": rust with a cobalt bloom */
+.g-spikes {
+  background:
+    radial-gradient(ellipse 38% 46% at 74% 50%, #364bc4 0%, rgba(54, 75, 196, 0.55) 45%, rgba(54, 75, 196, 0) 75%),
+    linear-gradient(160deg, #ab4f35 0%, #a6604f 100%);
+}
+/* "+" tile: orange → peach */
+.g-orange {
+  background: linear-gradient(160deg, #f2851c 0%, #f39a3e 45%, #fbc6a4 100%);
+}
+/* "−" tile: violet → orchid */
+.g-violet {
+  background: linear-gradient(150deg, #8c3af4 0%, #b06ce6 55%, #d484d9 100%);
+}
+/* "Ithem": sky blue */
+.g-sky {
+  background: linear-gradient(180deg, #6fbdeb 0%, #689ec0 100%);
+}
+/* "38": candy pink with a warm white glow at the bottom */
+.g-candy,
+.tap-card {
+  background:
+    radial-gradient(ellipse 70% 60% at 100% 0%, #fe196b 0%, rgba(254, 25, 107, 0) 70%),
+    radial-gradient(ellipse 70% 70% at 0% 15%, #f76eb4 0%, rgba(247, 110, 180, 0) 70%),
+    radial-gradient(ellipse 80% 55% at 50% 108%, #fffdf2 0%, #ffe08a 35%, rgba(255, 224, 138, 0) 75%),
+    #f59ad0;
+}
+/* "Pull": lilac → pink → rose */
+.g-pull,
+.pill {
+  background: linear-gradient(90deg, #d1a5c6 0%, #f263bf 55%, #f02e77 100%);
+}
+/* Dark tile */
+.g-ink {
+  background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+  box-shadow: inset 0 0 0 1px var(--tile-edge);
+}
+
+/* ---------- base ---------- */
+* {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--black);
+}
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--black);
+  color: var(--ink);
+  font: 400 16px/1.4 var(--font);
+  letter-spacing: -0.005em;
+}
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+h1,
+h2 {
+  text-wrap: balance;
+  font-weight: 400;
+}
+
+/* Dot-matrix type (Doto, round dots) */
+.dots {
+  font-family: var(--dots);
+  font-weight: 800;
+  font-variation-settings: "ROND" 100;
+  letter-spacing: 0.02em;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+.dots small {
+  font-family: var(--font);
+  font-weight: 400;
+}
+.dots-xl {
+  font-size: clamp(3.4rem, 17vw, 4.6rem);
+}
+.dots-l {
+  font-size: 2.6rem;
+}
+.dots-m {
+  font-size: 1.7rem;
+}
+.dots-s {
+  font-size: 1.15rem;
+}
+
+/* ---------- shared pieces ---------- */
+.tile {
+  position: relative;
+  border-radius: var(--r-tile);
+  overflow: hidden;
+  color: #fff;
+  text-align: left;
+  isolation: isolate;
+}
+.tile::after {
+  /* light catching the top edge of each tile */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+button.tile {
+  transition: transform 160ms var(--ease);
+}
+button.tile:active {
+  transform: scale(0.97);
+}
+.tile-label {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+.tile-unit {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.82);
+}
+.tile-foot {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+.tile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ruler {
+  display: block;
+  width: 100%;
+  height: 34px;
+}
+.ruler line {
+  stroke: #fff;
+  stroke-width: 1.4;
+}
+.ruler .ruler-mark {
+  stroke: var(--marker);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 1 !important;
+}
+
+.dial {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.dial > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.dial-tick {
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition: stroke 300ms;
+}
+.dial-tick.lit {
+  stroke: var(--marker);
+  stroke-width: 2.4;
+}
+.dial-orbit {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+}
+.dial-centre {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+.knob {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #1c1c1c;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f4f6f8 55%, #d9dde2 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), inset 0 -2px 6px rgba(0, 0, 0, 0.12);
+}
+.knob-photo {
+  width: 44%;
+  height: auto;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.knob-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.1);
+}
+
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 56px;
+  min-width: 220px;
+  padding: 6px 6px 6px 24px;
+  border-radius: var(--r-pill);
+  background: rgba(40, 40, 40, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 1rem;
+  transition: transform 160ms var(--ease), opacity 160ms;
+}
+.pill-btn i {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #1c1c1c;
+}
+/* "Start tracking" glow: dark → green → pale yellow under the button */
+.pill-btn.glow {
+  background:
+    radial-gradient(ellipse 48% 130% at 74% 60%, #f3f0b0 0%, #c8d96a 22%, #548239 52%, rgba(84, 130, 57, 0) 86%),
+    #1c1c1c;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+.pill-btn:active {
+  transform: scale(0.97);
+}
+.pill-btn:disabled {
+  opacity: 0.5;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 4px 0 14px;
+  border-radius: var(--r-pill);
+  background: rgba(60, 40, 55, 0.45);
+  color: #fff;
+  font-size: 0.9rem;
+  transition: background 200ms;
+}
+.toggle i {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.5;
+  transform: translateX(-2px);
+  transition: opacity 200ms, transform 240ms var(--ease);
+}
+.toggle.on i {
+  opacity: 1;
+  transform: none;
+}
+.toggle.on {
+  background: rgba(70, 40, 60, 0.6);
+}
+
+.round-btn {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1c1c1c;
+  box-shadow: inset 0 0 0 1px var(--tile-edge);
+  color: #fff;
+  transition: transform 140ms var(--ease);
+}
+.round-btn:active {
+  transform: scale(0.92);
+}
+
+.screen-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: max(16px, env(safe-area-inset-top)) 0 18px;
+}
+.screen-head h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  letter-spacing: -0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  color: var(--danger);
+  margin: 12px 0 0;
+  text-align: center;
+}
+.link {
+  color: #fff;
+  font-weight: 500;
+  padding: 10px;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+  text-underline-offset: 4px;
+}
+.link.small {
+  font-size: 0.9rem;
+  padding: 6px 0;
+}
+.muted {
+  color: var(--ink-2);
+  margin: 4px 0 0;
+}
+.big {
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: #111;
+  font-weight: 500;
+}
+
+.chip,
+.seg {
+  flex: none;
+  font-size: 0.9rem;
+  padding: 9px 16px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  color: var(--ink);
+  transition: background 160ms, color 160ms, transform 140ms var(--ease);
+}
+.chip.on {
+  background: #fff;
+  color: #111;
+  box-shadow: none;
+}
+.seg.on {
+  background: linear-gradient(180deg, #6fbdeb 0%, #689ec0 100%);
+  color: #fff;
+  box-shadow: none;
+}
+.chip:active,
+.seg:active {
+  transform: scale(0.95);
+}
+.seg:disabled {
+  opacity: 0.35;
+}
+
+/* ---------- tab bar: the day selector (○ ● ○) ---------- */
+.has-tabs .home,
+.has-tabs .tab-page {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+.tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 0 0 1px var(--tile-edge), 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+.tabbar button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  transition: color 200ms, padding 260ms var(--ease);
+}
+.tabbar button i {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  transition: background 220ms, color 220ms, box-shadow 220ms;
+}
+.tabbar button i svg {
+  width: 20px;
+  height: 20px;
+}
+.tabbar button span {
+  display: none;
+}
+.tabbar button.on {
+  color: #fff;
+  padding-right: 18px;
+}
+.tabbar button.on i {
+  background: #fff;
+  color: #111;
+  box-shadow: none;
+}
+.tabbar button.on span {
+  display: inline;
+  white-space: nowrap;
+}
+
+/* ---------- home ---------- */
+.home {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 12px 0;
+}
+.home-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 12px 8px 20px;
+}
+.brand {
+  font-family: var(--dots);
+  font-weight: 800;
+  font-variation-settings: "ROND" 100;
+  font-size: 1.9rem;
+}
+.home-sub {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.bento {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tile-hero {
+  grid-column: 1 / -1;
+  min-height: 380px;
+  padding: 24px 22px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.tile-hero .tile-core {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: #f6dbe9;
+}
+.tile-hero .tile-foot {
+  text-align: center;
+}
+.tile-pick,
+.tile-sample,
+.tile-status {
+  min-height: 196px;
+  padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tile-pick .dial {
+  align-self: center;
+  margin-top: auto;
+}
+.tile-sample .tile-value {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tile-status {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+.status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.status-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-2);
+}
+/* "ON" chip: mint → lime */
+.chip-on {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  border-radius: 12px;
+  color: #fff;
+  background: #333;
+}
+.chip-on.on {
+  background: linear-gradient(160deg, #a7d99e 0%, #b9e08f 55%, #e8f07a 100%);
+}
+
+/* ---------- reading ---------- */
+.reading {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 12px max(20px, env(safe-area-inset-bottom));
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.reading-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 18px 26px;
+}
+.reading-card .tile-label {
+  align-self: stretch;
+  text-align: center;
+}
+.reading-card .dial {
+  margin-top: auto;
+}
+.reading-pct {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.phase-dots {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  margin: auto 0 0;
+}
+.phase-dots li {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+  transition: background 300ms, width 300ms var(--ease);
+}
+.phase-dots li.done {
+  background: rgba(255, 255, 255, 0.85);
+}
+.phase-dots li.now {
+  width: 18px;
+  background: var(--marker);
+}
+.hint {
+  color: var(--ink-3);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: 14px 0 0;
+}
+
+/* ---------- score ---------- */
+.score-screen {
+  min-height: 100dvh;
+  padding-bottom: calc(176px + env(safe-area-inset-bottom));
+}
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 12px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.94) 70%, rgba(0, 0, 0, 0));
+}
+.top h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-spacer {
+  width: 48px;
+  flex: none;
+}
+.pill {
+  flex: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: var(--r-pill);
+  color: #fff;
+}
+.score-loading,
+.score-error {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ink-2);
+}
+.score-error {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+
+.view-switch {
+  display: flex;
+  gap: 6px;
+  width: fit-content;
+  margin: 2px auto 14px;
+}
+.view-switch button {
+  padding: 10px 18px;
+  border-radius: var(--r-pill);
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  transition: background 200ms, color 200ms;
+}
+.view-switch button.on {
+  background: #fff;
+  color: #111;
+  box-shadow: none;
+}
+
+/* Your pages: paper tiles on the black stage */
+.pages {
+  display: grid;
+  gap: 12px;
+  padding: 0 10px;
+}
+.page {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--paper);
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: pan-y pinch-zoom;
+}
+.page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.page svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.page .now {
+  fill: rgba(254, 25, 107, 0.07);
+  stroke: rgba(254, 25, 107, 0.45);
+  stroke-width: 4;
+  pointer-events: none;
+}
+.page .now.playing {
+  fill: rgba(254, 25, 107, 0.12);
+  stroke: #fe196b;
+  stroke-width: 6;
+}
+.page .cursor {
+  stroke: #c8b400;
+  stroke-width: 8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.page .picked {
+  fill: rgba(111, 189, 235, 0.25);
+  stroke: #3f8fc0;
+  stroke-width: 4;
+  pointer-events: none;
+}
+.pages-note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin: 0 12px;
+}
+
+/* Clean score: engraved on a paper tile too */
+.paper {
+  margin: 0 10px;
+  padding: 10px 0;
+  border-radius: 22px;
+  background: var(--paper);
+  touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.paper.tucked {
+  position: absolute;
+  left: -200vw;
+  top: 0;
+  width: 100vw;
+  height: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.osmd {
+  width: 100%;
+  overflow-x: hidden;
+}
+.osmd svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.osmd .is-note * {
+  transition: fill 120ms, stroke 120ms;
+}
+.osmd .is-muted * {
+  fill: #c9c9c9 !important;
+  stroke: #c9c9c9 !important;
+}
+.osmd .is-cursor * {
+  fill: #be2e6a !important;
+  stroke: #be2e6a !important;
+}
+.osmd .is-selected * {
+  fill: #2c83c6 !important;
+  stroke: #2c83c6 !important;
+}
+.osmd .is-active * {
+  fill: #fe196b !important;
+  stroke: #fe196b !important;
+}
+.paper.selecting {
+  cursor: crosshair;
+}
+
+/* Tapped note: a small "38"-candy card */
+.tap-card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(184px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: min(300px, calc(100vw - 32px));
+  padding: 18px 18px 10px;
+  border-radius: 26px;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  animation: rise 300ms var(--ease);
+}
+.tap-card span {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+.tap-card .link {
+  color: #fff;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+.tap-actions {
+  display: flex;
+  gap: 22px;
+}
+.tap-tip {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-style: normal;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.98);
+  }
+}
+
+/* The dock: one dark tile, play orb in the middle */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 20px));
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 30px;
+  background: rgba(24, 24, 24, 0.9);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 0 0 1px var(--tile-edge), 0 14px 36px rgba(0, 0, 0, 0.6);
+}
+.parts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.controls .seg {
+  justify-self: start;
+}
+/* Play: the iridescent "pause" orb */
+.play {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: radial-gradient(circle at 34% 28%, #eef7ff 0%, #9fd6dc 22%, #408692 52%, #8fae8a 74%, #c9c983 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5), 0 8px 22px rgba(64, 134, 146, 0.45);
+  transition: transform 140ms var(--ease), opacity 160ms;
+}
+.play svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+/* Playing: the orange "Stop" pill colours */
+.play.is-playing {
+  background: linear-gradient(180deg, #f2302a 0%, #fc951c 55%, #f1992d 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.4), 0 8px 22px rgba(252, 149, 28, 0.4);
+}
+.play:active {
+  transform: scale(0.93);
+}
+.play:disabled {
+  opacity: 0.35;
+}
+.speed {
+  justify-self: end;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-width: 150px;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.speed-read {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 4px;
+  color: #fff;
+}
+/* Speed slider drawn as the tick ruler with the yellow marker */
+.speed input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.45) 0 1.5px, transparent 1.5px 7px) center / 100% 12px no-repeat;
+}
+.speed input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 4px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--marker);
+}
+.speed input::-moz-range-thumb {
+  width: 4px;
+  height: 26px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--marker);
+}
+.clear {
+  justify-self: center;
+}
+
+/* ---------- sheets (dialogs) ---------- */
+.sheet {
+  border: 0;
+  padding: 0;
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92dvh;
+  color: #fff;
+  background: #141414;
+  border-radius: 32px 32px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: sheet-in 420ms var(--ease);
+}
+.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.sheet-body {
+  padding: 10px 20px max(22px, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 4px;
+}
+.sheet-body > .pill-btn {
+  justify-self: center;
+  margin-top: 8px;
+}
+.grabber {
+  display: block;
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: #3a3a3a;
+  margin: 0 auto 14px;
+}
+.sheet h2 {
+  margin: 0 0 6px;
+  font-size: 1.4rem;
+}
+.facts {
+  padding-left: 20px;
+  margin: 12px 0 14px;
+  display: grid;
+  gap: 6px;
+  color: var(--ink-2);
+}
+.facts ul {
+  padding-left: 18px;
+  font-size: 0.9rem;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* ---------- sing meter ---------- */
+.sing {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+.sing-ladder {
+  width: 100%;
+  height: 210px;
+  border-radius: 22px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--tile-edge);
+}
+.sing.compact .sing-ladder {
+  height: 170px;
+}
+.sing-words {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  min-height: 4em;
+}
+.sing-words strong {
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+.sing-words span {
+  color: var(--ink-2);
+}
+.sing[data-tone="good"] .sing-words strong {
+  color: var(--good);
+}
+.sing[data-tone="near"] .sing-words strong {
+  color: var(--near);
+}
+.sing[data-tone="far"] .sing-words strong {
+  color: var(--accent);
+}
+.sing-words .held {
+  font-size: 0.8rem;
+  color: var(--good);
+}
+/* Octave suggestion: the "−" violet tile */
+.sing-suggest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 18px;
+  border-radius: 22px;
+  font-size: 0.92rem;
+  color: #fff;
+  background: linear-gradient(150deg, #8c3af4 0%, #b06ce6 55%, #d484d9 100%);
+  animation: lift 300ms var(--ease);
+}
+@keyframes lift {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.sing-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sing-head .tile-label {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.sing-head h2 {
+  margin: 6px 0 0;
+}
+.sing-head h2 small {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  margin-left: 6px;
+}
+.octave-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+/* ---------- tuner ---------- */
+.tab-page {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+.tuner-card {
+  padding: 22px 22px 20px;
+  display: grid;
+  gap: 8px;
+  min-height: min(56dvh, 470px);
+  grid-template-rows: auto 1fr auto auto;
+}
+.tuner-core {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: #f6dbe9;
+}
+.tuner-note {
+  font-size: clamp(4.4rem, 26vw, 6.4rem);
+  transition: opacity 240ms;
+}
+.tuner[data-state="held"] .tuner-note {
+  opacity: 0.5;
+}
+.tuner-sub {
+  min-height: 1.4em;
+}
+.tuner-ruler {
+  display: grid;
+  gap: 2px;
+}
+.ruler-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+.tuner-cents {
+  text-align: center;
+  min-height: 1.4em;
+  font-weight: 500;
+}
+.tuner-trail-card {
+  margin-top: 10px;
+  padding: 16px 16px 12px;
+  display: grid;
+  gap: 8px;
+}
+.tuner-trail-card .tile-label {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.tuner-hz {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.tuner-trail {
+  width: 100%;
+  height: 84px;
+}
+.tuner-core.tappable {
+  cursor: pointer;
+  border-radius: 24px;
+  transition: transform 160ms var(--ease);
+}
+.tuner-core.tappable:active {
+  transform: scale(0.97);
+}
+.tuner-actions {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* ---------- warm-ups ---------- */
+.range-pick {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.range-pick button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 0;
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.range-pick button i {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 0.9rem;
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  transition: background 200ms, color 200ms;
+}
+.range-pick button.on {
+  color: #fff;
+}
+.range-pick button.on i {
+  background: #fff;
+  color: #111;
+  box-shadow: none;
+}
+.ex-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ex-tile {
+  width: 100%;
+  min-height: 172px;
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ex-tile .tile-label {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+.ex-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.contour {
+  width: 100%;
+  height: 48px;
+}
+.contour rect {
+  fill: #fff;
+}
+.contour polyline {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+.session-row {
+  margin-bottom: 12px;
+}
+.session-row .tile-label {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.session-row .toggle {
+  background: #1c1c1c;
+  box-shadow: inset 0 0 0 1px var(--tile-edge);
+}
+.session .tab-lede {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  margin: 0 0 12px;
+}
+.lane {
+  position: relative;
+  height: min(42dvh, 340px);
+  border-radius: 26px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--tile-edge);
+  overflow: hidden;
+}
+.lane.compact {
+  height: min(28dvh, 240px);
+}
+.lane canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.lane-msg {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  text-align: center;
+}
+.lane-words {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  min-height: 4.4em;
+  margin: 12px 0 6px;
+}
+.lane-words strong {
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+.lane-words > span:not(.dots) {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+.lane-words[data-tone="good"] strong {
+  color: var(--good);
+}
+.lane-words[data-tone="near"] strong {
+  color: var(--near);
+}
+.lane-words[data-tone="far"] strong {
+  color: var(--accent);
+}
+.ex-sheet {
+  max-height: 34dvh;
+  overflow-y: auto;
+  border-radius: 22px;
+  background: var(--paper);
+  margin-bottom: 14px;
+}
+.ex-sheet .is-active * {
+  fill: #fe196b !important;
+  stroke: #fe196b !important;
+}
+.session-actions {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.session-actions .octave-row {
+  width: 100%;
+  margin: 4px 0 0;
+}
+
+/* ---------- wider screens, motion, accessibility ---------- */
+@media (min-width: 760px) {
+  .paper,
+  .pages {
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .tabbar,
+  .dock {
+    background: #181818;
+    backdrop-filter: none;
+  }
+}
+
+/* Inside a warm-up the screen is the player's: no tab bar, Start/Stop pinned at the bottom. */
+.has-tabs:has(.session) .tabbar {
+  display: none;
+}
+.has-tabs .tab-page.session {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.session .session-actions {
+  position: sticky;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 2;
+  padding: 10px 0 0;
+}
+.session .session-actions .octave-row {
+  padding: 8px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+/* The tapped-note card keeps its warm glow in the corner, away from the small text. */
+.tap-card {
+  background:
+    radial-gradient(ellipse 70% 60% at 100% 0%, #fe196b 0%, rgba(254, 25, 107, 0) 70%),
+    radial-gradient(ellipse 70% 70% at 0% 15%, #f76eb4 0%, rgba(247, 110, 180, 0) 70%),
+    radial-gradient(ellipse 50% 45% at 0% 110%, #fffdf2 0%, #ffe08a 35%, rgba(255, 224, 138, 0) 75%),
+    #e57ab8;
+}
+
+/* ======================================================================
+   Round 2: exact tiles from the reference board (sampled pixel colours)
+   ====================================================================== */
+
+/* "ON": mint top-left → leaf green right → lemon bottom-left, white bloom in the middle */
+.g-on,
+.chip-on.on {
+  background:
+    radial-gradient(ellipse 75% 60% at 0% 100%, #f1ec52 0%, #f6f364 22%, rgba(241, 236, 82, 0) 100%),
+    radial-gradient(ellipse 48% 38% at 50% 52%, rgba(243, 255, 242, 0.92) 0%, rgba(243, 255, 242, 0) 100%),
+    radial-gradient(ellipse 60% 60% at 0% 0%, #c6e7bc 0%, rgba(198, 231, 188, 0) 100%),
+    linear-gradient(160deg, #aeddaf 0%, #8dcd81 35%, #72be63 70%, #c3e1bb 100%);
+}
+/* "38": hot pink crown, orchid middle, apricot band, white-cream base */
+.g-candy,
+.tap-card {
+  background:
+    radial-gradient(ellipse 55% 35% at 88% 0%, #fe196b 0%, rgba(254, 25, 107, 0) 100%),
+    radial-gradient(ellipse 60% 42% at 52% 30%, #f74faf 0%, rgba(247, 79, 175, 0) 100%),
+    radial-gradient(ellipse 72% 38% at 55% 72%, #ffd27d 0%, rgba(255, 210, 125, 0) 100%),
+    radial-gradient(ellipse 60% 40% at 12% 100%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, #f6a7d0 0%, #f8b9c6 50%, #fbeedb 100%);
+}
+/* "Pull": lilac → orchid → hot pink, milky light along the bottom */
+.g-pull,
+.pill {
+  background:
+    radial-gradient(ellipse 34% 70% at 16% 112%, #efddeb 0%, rgba(239, 221, 235, 0) 100%),
+    radial-gradient(ellipse 28% 60% at 46% 108%, #f6d4f7 0%, rgba(246, 212, 247, 0) 100%),
+    linear-gradient(90deg, #ca95bf 0%, #dd94dd 22%, #f07cdf 42%, #f73a98 62%, #f92176 78%, #f71465 100%);
+}
+/* "Stopwatch": cyan corner, sage-lime corner, cobalt haze, graphite base */
+.g-stopwatch {
+  background:
+    radial-gradient(ellipse 62% 42% at 0% 0%, #60deea 0%, rgba(96, 222, 234, 0) 100%),
+    radial-gradient(ellipse 55% 40% at 100% 0%, #c9e5b4 0%, #9bc681 35%, rgba(155, 198, 129, 0) 100%),
+    radial-gradient(ellipse 85% 55% at 25% 32%, #23649c 0%, rgba(35, 100, 156, 0) 100%),
+    radial-gradient(ellipse 60% 40% at 28% 100%, rgba(45, 105, 115, 0.85) 0%, rgba(45, 105, 115, 0) 100%),
+    #1d1d1f;
+}
+/* "+": amber, sun-yellow top-right, ember bottom-left, glowing orb */
+.g-plus,
+.g-orange {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 245, 234, 0.9) 0%, rgba(246, 181, 125, 0.55) 22%, rgba(246, 181, 125, 0) 40%),
+    radial-gradient(ellipse 75% 60% at 100% 0%, #feba17 0%, rgba(254, 186, 23, 0) 100%),
+    radial-gradient(ellipse 75% 60% at 0% 100%, #e95433 0%, rgba(233, 84, 51, 0) 100%),
+    #f28a26;
+}
+/* "−": violet top, blush bottom-left, orchid bottom-right, lilac orb */
+.g-minus,
+.g-violet,
+.sing-suggest {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(205, 160, 235, 0.55) 0%, rgba(205, 160, 235, 0) 34%),
+    radial-gradient(ellipse 75% 55% at 0% 100%, #fdc8ce 0%, rgba(253, 200, 206, 0) 100%),
+    radial-gradient(ellipse 75% 55% at 100% 100%, #dc91e6 0%, rgba(220, 145, 230, 0) 100%),
+    linear-gradient(180deg, #973df5 0%, #9a50ee 45%, #b366da 100%);
+}
+
+/* The 38 tile's inner glow: a bright rim of light just inside every gradient edge. */
+.g-bloom,
+.g-sage,
+.g-glucose,
+.g-range,
+.g-vari,
+.g-vitamin,
+.g-spikes,
+.g-sky,
+.g-on,
+.g-candy,
+.g-pull,
+.g-stopwatch,
+.g-plus,
+.g-orange,
+.g-minus,
+.g-violet,
+.tap-card,
+.sing-suggest,
+.chip-on.on,
+.pill,
+.seg.on,
+.play,
+.pill-btn.glow {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.42),
+    inset 0 0 44px rgba(255, 255, 255, 0.14);
+}
+.tap-card {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.42),
+    inset 0 0 44px rgba(255, 255, 255, 0.14),
+    0 16px 40px rgba(0, 0, 0, 0.55);
+}
+.play {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.55),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.45),
+    0 8px 22px rgba(64, 134, 146, 0.45);
+}
+.play.is-playing {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.5),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.4),
+    0 8px 22px rgba(252, 149, 28, 0.4);
+}
+.g-ink {
+  box-shadow: inset 0 0 0 1px var(--tile-edge), inset 0 0 18px rgba(255, 255, 255, 0.05);
+}
+/* On the light tiles (38, Pull, ON), white type needs a whisper of shadow to stay readable. */
+.g-candy,
+.g-pull,
+.g-on,
+.chip-on.on,
+.tap-card {
+  text-shadow: 0 1px 6px rgba(120, 30, 70, 0.35);
+}
+.chip-on.on {
+  text-shadow: 0 1px 4px rgba(40, 90, 20, 0.45);
+}
+
+/* "ON" chip: the reference's rounded square, not a pill */
+.chip-on {
+  min-width: 54px;
+  text-align: center;
+  padding: 9px 12px;
+  border-radius: 14px;
+}
+
+/* Tuner: the sage "Move camera closer" screen */
+.tuner-core {
+  color: #e9efec;
+}
+.tuner-card .toggle {
+  background: rgba(20, 28, 30, 0.5);
+}
+.chip-on {
+  min-width: 68px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 15px;
+  font-size: 0.8rem;
+}
+.status-list {
+  gap: 10px;
+}
+
+/* ======================================================================
+   Play / pause: SD Center's welcome orb (sd-center/components/AiOrb.tsx,
+   .sdc-orb in Onboarding1Welcome.dc.html), scaled from 180px to 70px.
+   Three inset glows (white highlight, mid, deep) on a spinning sphere that
+   crossfades between two colorways: purple/blue ↔ red/navy.
+   ====================================================================== */
+.play {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 10px 26px rgba(88, 60, 220, 0.38);
+}
+.play::before,
+.play::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: -1;
+  animation: orb-spin 9.6s linear infinite;
+}
+/* Colorway A: white / #AF52DE / #007AFF  (shadow offsets × 70/180) */
+.play::before {
+  box-shadow:
+    inset 0 3.9px 7.8px #fff,
+    inset 0 7.8px 11.7px #af52de,
+    inset 0 23.3px 23.3px #007aff;
+  animation-name: orb-spin, orb-fade-a;
+}
+/* Colorway B: white / #FF3B30 / #1A1470 */
+.play::after {
+  box-shadow:
+    inset 0 3.9px 7.8px #fff,
+    inset 0 7.8px 3.9px #ff3b30,
+    inset 0 15.6px 23.3px #1a1470;
+  animation-name: orb-spin, orb-fade-b;
+}
+/* Playing: the welcome screen's own speed */
+.play.is-playing {
+  background: #000;
+  box-shadow: 0 10px 30px rgba(255, 59, 48, 0.35);
+}
+.play.is-playing::before,
+.play.is-playing::after {
+  animation-duration: 2.4s;
+}
+.play svg {
+  position: relative;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+}
+@keyframes orb-spin {
+  from {
+    transform: rotate(90deg);
+  }
+  to {
+    transform: rotate(450deg);
+  }
+}
+@keyframes orb-fade-a {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes orb-fade-b {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play::before,
+  .play::after {
+    animation: none;
+    transform: rotate(180deg);
+  }
+  .play::after {
+    opacity: 0;
+  }
+}
+
+/* "ON" chips: SD Center's teal-void gradient avatar (@oreo-design/avatar "void" / "teal-void"):
+   deep teal base #063a3b, a wide blurred #118f84 glow, a bright #93ffd2 bar of light,
+   and the avatar's faint #71abff rim. */
+.chip-on.on {
+  color: #04302f;
+  text-shadow: none;
+  background:
+    radial-gradient(ellipse 42% 24% at 50% 50%, #93ffd2 0%, rgba(147, 255, 210, 0.8) 45%, rgba(147, 255, 210, 0) 100%),
+    radial-gradient(ellipse 62% 48% at 50% 50%, #118f84 0%, rgba(17, 143, 132, 0.62) 50%, rgba(17, 143, 132, 0) 100%),
+    #063a3b;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 0 6px 1px rgba(113, 171, 255, 0.3),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.1);
+}
+
+/* Play orb: no outer glow at all; playing only makes it spin faster. */
+.play,
+.play.is-playing {
+  box-shadow: none;
+}
+
+/* ======================================================================
+   Round 3
+   ====================================================================== */
+
+/* Fermata wordmark in the header */
+img.brand {
+  display: block;
+  height: 30px;
+  width: auto;
+}
+
+/* "ON" chips: the Nine-note run tile (the reference's "−" tile) */
+.chip-on.on {
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(70, 20, 120, 0.45);
+  background:
+    radial-gradient(circle at 50% 46%, rgba(205, 160, 235, 0.55) 0%, rgba(205, 160, 235, 0) 34%),
+    radial-gradient(ellipse 75% 55% at 0% 100%, #fdc8ce 0%, rgba(253, 200, 206, 0) 100%),
+    radial-gradient(ellipse 75% 55% at 100% 100%, #dc91e6 0%, rgba(220, 145, 230, 0) 100%),
+    linear-gradient(180deg, #973df5 0%, #9a50ee 45%, #b366da 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    inset 0 0 14px 2px rgba(255, 255, 255, 0.42),
+    inset 0 0 44px rgba(255, 255, 255, 0.14);
+}
+
+/* Pink bloom, smoothed: each layer fades on an eased curve (many stops) instead of
+   a few straight ramps, so there are no visible rings or bands. Same colours. */
+.g-bloom {
+  background:
+    radial-gradient(
+      ellipse 34% 26% at 50% 42%,
+      rgba(68, 15, 51, 1) 0%,
+      rgba(68, 15, 51, 0.94) 12%,
+      rgba(68, 15, 51, 0.82) 24%,
+      rgba(68, 15, 51, 0.66) 36%,
+      rgba(68, 15, 51, 0.49) 48%,
+      rgba(68, 15, 51, 0.33) 60%,
+      rgba(68, 15, 51, 0.19) 72%,
+      rgba(68, 15, 51, 0.09) 84%,
+      rgba(68, 15, 51, 0.03) 93%,
+      rgba(68, 15, 51, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 64% 50% at 50% 44%,
+      rgba(171, 39, 95, 1) 0%,
+      rgba(186, 44, 104, 0.96) 18%,
+      rgba(197, 50, 115, 0.86) 32%,
+      rgba(193, 50, 112, 0.8) 45%,
+      rgba(190, 52, 110, 0.64) 57%,
+      rgba(191, 66, 120, 0.44) 68%,
+      rgba(195, 96, 146, 0.24) 79%,
+      rgba(199, 130, 172, 0.08) 89%,
+      rgba(201, 152, 189, 0) 100%
+    ),
+    #c998bd;
+}
+
+/* Play orb while playing: momentum (slow, FAST, slow) on every turn */
+.play.is-playing::before,
+.play.is-playing::after {
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1), linear;
+}
+
+/* ---------- warm-up review ---------- */
+.lane.reviewing canvas {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.lane.reviewing canvas:active {
+  cursor: grabbing;
+}
+.lane-hint {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+.review-card {
+  margin: 12px 0 14px;
+  padding: 18px 18px 16px;
+  display: grid;
+  gap: 10px;
+  animation: lift 320ms var(--ease);
+}
+.review-card p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.review-card .tile-label {
+  font-size: 1.05rem;
+}
+.review-card[data-tone="good"] .tile-label {
+  color: var(--good);
+}
+.review-card[data-tone="near"] .tile-label {
+  color: var(--near);
+}
+.review-card[data-tone="far"] .tile-label {
+  color: var(--accent);
+}
+.review-score {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.review-chip {
+  margin-left: auto;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  color: var(--ink-2);
+}
+.review-tip {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink) !important;
+}
+.review-tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+}
+.review-hint {
+  font-size: 0.85rem;
+  color: var(--ink-2) !important;
+}
+.round-btn.small {
+  width: 34px;
+  height: 34px;
+  font-size: 1.1rem;
+}
+
+/* ---------- play orb: big momentum while playing ----------
+   Each cycle is two full turns that start almost still, whip round, and settle
+   (a steep ease-in-out), so you can feel it winding up and coasting. */
+.play.is-playing::before,
+.play.is-playing::after {
+  animation-name: orb-spin-surge, orb-fade-a;
+  animation-duration: 2.2s, 2.2s;
+  animation-timing-function: cubic-bezier(0.9, 0, 0.1, 1), linear;
+}
+.play.is-playing::after {
+  animation-name: orb-spin-surge, orb-fade-b;
+}
+@keyframes orb-spin-surge {
+  from {
+    transform: rotate(90deg);
+  }
+  to {
+    transform: rotate(810deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play.is-playing::before,
+  .play.is-playing::after {
+    animation: none;
+  }
+}
+.session .session-actions {
+  margin: 0 -12px;
+  padding: 28px 12px 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.92) 30%, #000 100%);
+}

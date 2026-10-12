@@ -1,0 +1,4 @@
+Salamander Grand Piano V3 by Alexander Holm
+Licensed under Creative Commons Attribution 3.0 (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+MP3 conversions from https://tonejs.github.io/audio/salamander/

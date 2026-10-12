@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "snap-play", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5190, "url": "https://localhost:5190" }
+  ]
+}
