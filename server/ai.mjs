@@ -4,10 +4,8 @@
 // Keys come from .env.local on this computer and are only ever sent to Google / Groq.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { KNOWLEDGE } from "./knowledge.mjs";
 
-const KNOWLEDGE = readFileSync(path.join(import.meta.dirname, "knowledge.md"), "utf8");
 // Groq's free tier allows ~7,000 input tokens a minute: send it the essential sections only.
 const SHORT_SECTIONS = /^## (1|2|3|4|5|6|9)\./;
 const KNOWLEDGE_SHORT = KNOWLEDGE.split(/(?=^## )/m)

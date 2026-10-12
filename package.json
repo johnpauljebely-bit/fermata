@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc -p . && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "knowledge": "node scripts/build-knowledge.mjs"
   },
   "license": "MIT",
   "type": "module",

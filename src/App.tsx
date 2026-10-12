@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { cancelReading, getStatus, readProgress, startReading, type AIAnswer, type ReadProgress, type Status } from "./api";
+import { cancelReading, getStatus, readProgress, shrinkPhoto, startReading, type AIAnswer, type ReadProgress, type Status } from "./api";
+
+/** Uploads in flight, by the temporary id the reading screen starts with. */
+const uploads = new Map<string, Promise<{ id: string } | ReadProgress>>();
 import { prefetchPiano } from "./audio/piano";
 import { applyCheck, mergeScores, transcriptionToXml } from "./music/xml";
 import { ScoreScreen, type ScoreInfo } from "./ScoreScreen";
@@ -21,7 +24,10 @@ export function App() {
     return id ? { kind: "reading", id, preview: null, name: "" } : { kind: "home" };
   });
   const setScreen = (next: Screen) => {
-    const hash = next.kind === "reading" ? `#read=${next.id}` : next.kind === "score" && screen.kind === "reading" ? `#read=${screen.id}` : "";
+    // Only real reading ids go in the address (temporary upload ids can't be reopened).
+    const realId = (id: string) => (/^[0-9a-f-]{36}$/.test(id) ? id : null);
+    const id = next.kind === "reading" ? realId(next.id) : next.kind === "score" && next.info.pages ? realId(next.info.pages.jobId) : null;
+    const hash = id ? `#read=${id}` : "";
     history.replaceState(null, "", hash || location.pathname + location.search);
     setScreenState(next);
   };
@@ -34,15 +40,14 @@ export function App() {
     void prefetchPiano().catch(() => undefined);
   }, []);
 
-  const read = async (file: File) => {
+  const read = (file: File) => {
     setError(null);
     const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
-    try {
-      const id = await startReading(file);
-      setScreen({ kind: "reading", id, preview, name: file.name.replace(/\.[^.]+$/, "") });
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    // Show the reading screen straight away; the upload (and, on Vercel, the whole reading)
+    // happens behind it. Hosted uploads are shrunk to fit Vercel's request limit.
+    const key = `upload-${Date.now()}`;
+    uploads.set(key, (status?.hosted ? shrinkPhoto(file) : Promise.resolve(file)).then(startReading));
+    setScreen({ kind: "reading", id: key, preview, name: file.name.replace(/\.[^.]+$/, "") });
   };
 
   const openSample = async () => {
@@ -169,13 +174,15 @@ function Home({ status, error, onFile, onSample }: { status: Status | null; erro
         <div className="tile g-ink tile-status" role="status">
           <span className="tile-label">Ready</span>
           {status === null ? (
-            <span className="tile-foot">Can't reach the Mac</span>
+            <span className="tile-foot">Can't reach the server</span>
           ) : (
             <ul className="status-list">
-              <li>
-                <span>Reader</span>
-                <span className={`chip-on ${status.reader ? "on" : ""}`}>{status.reader ? "ON" : "OFF"}</span>
-              </li>
+              {status.hosted ? null : (
+                <li>
+                  <span>Reader</span>
+                  <span className={`chip-on ${status.reader ? "on" : ""}`}>{status.reader ? "ON" : "OFF"}</span>
+                </li>
+              )}
               <li>
                 <span>{ai || "AI"}</span>
                 <span className={`chip-on ${ai ? "on" : ""}`}>{ai ? "ON" : "OFF"}</span>
@@ -223,25 +230,47 @@ function Reading({
   const [p, setP] = useState<ReadProgress | null>(null);
   const done = useRef(false);
 
+  const [elapsed, setElapsed] = useState(0);
+
   useEffect(() => {
     let alive = true;
+    let jobId: string | null = id.startsWith("upload-") ? null : id;
+    const started = Date.now();
+    const clock = setInterval(() => alive && setElapsed((Date.now() - started) / 1000), 500);
+
+    const handle = (next: ReadProgress): boolean => {
+      setP(next);
+      if (next.state === "done" && !done.current) {
+        done.current = true;
+        try {
+          const { xml, info } = finish(next, name, jobId ?? id);
+          onDone(xml, info);
+        } catch (e) {
+          onFail((e as Error).message);
+        }
+        return true;
+      }
+      if (next.state === "error") {
+        onFail(next.error ?? "Couldn't read that.");
+        return true;
+      }
+      return next.state === "cancelled";
+    };
+
     const tick = async () => {
       try {
-        const next = await readProgress(id);
-        if (!alive) return;
-        setP(next);
-        if (next.state === "done" && !done.current) {
-          done.current = true;
-          try {
-            const { xml, info } = finish(next, name, id);
-            onDone(xml, info);
-          } catch (e) {
-            onFail((e as Error).message);
-          }
-          return;
+        if (!jobId) {
+          // Waiting for the upload: on your Mac it answers with a job id, on Vercel with the result.
+          const answer = await uploads.get(id);
+          uploads.delete(id);
+          if (!alive) return;
+          if (!answer) return onFail("That reading is no longer available. Please try again.");
+          if ("state" in answer) return void handle(answer);
+          jobId = answer.id;
+          history.replaceState(null, "", `#read=${jobId}`);
         }
-        if (next.state === "error") return onFail(next.error ?? "Couldn't read that.");
-        if (next.state === "cancelled") return;
+        const next = await readProgress(jobId);
+        if (!alive || handle(next)) return;
       } catch (e) {
         if (alive) return onFail((e as Error).message);
       }
@@ -250,11 +279,14 @@ function Reading({
     void tick();
     return () => {
       alive = false;
+      clearInterval(clock);
     };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const phaseIndex = p ? Math.max(0, PHASES.findIndex((ph) => ph.key.includes(p.phase))) : 0;
-  const pct = Math.round((p?.progress ?? 0) * 100);
+  const waiting = !p; // uploading, or (on Vercel) the AI is reading in one go
+  const progress = p ? p.progress : 0.9 * (1 - Math.exp(-elapsed / 25));
+  const phaseIndex = p ? Math.max(0, PHASES.findIndex((ph) => ph.key.includes(p.phase))) : elapsed > 4 ? 3 : 0;
+  const pct = Math.round(progress * 100);
 
   return (
     <main className="reading">
@@ -264,7 +296,7 @@ function Reading({
       </header>
       <section className="tile g-sage reading-card">
         <span className="tile-label">{PHASES[phaseIndex].label}</span>
-        <Dial size={Math.min(300, window.innerWidth - 80)} ticks={84} progress={p?.progress ?? 0}>
+        <Dial size={Math.min(300, window.innerWidth - 80)} ticks={84} progress={progress}>
           <span className="knob knob-photo">{preview ? <img src={preview} alt="" /> : <DocIcon />}</span>
         </Dial>
         <div className="reading-pct" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
@@ -282,7 +314,9 @@ function Reading({
           ? "Waiting for another reading to finish…"
           : p
             ? `${p.seconds}s · ${p.pages > 1 ? `${p.pages} pages · ` : ""}bigger pages take a minute or two`
-            : "Uploading…"}
+            : waiting && elapsed > 4
+              ? `${Math.round(elapsed)}s · the AI is reading the whole page`
+              : "Uploading…"}
       </p>
     </main>
   );

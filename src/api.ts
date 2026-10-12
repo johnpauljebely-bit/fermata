@@ -4,6 +4,8 @@ export interface Status {
   reader: boolean;
   straighten: boolean;
   ai: { gemini: boolean; groq: boolean };
+  /** Running on Vercel: no music reader, the AI reads pages in one request. */
+  hosted?: boolean;
 }
 
 export interface Expression {
@@ -75,9 +77,30 @@ async function json<T>(res: Response): Promise<T> {
 
 export const getStatus = () => fetch("/api/status").then((r) => json<Status>(r));
 
-export async function startReading(file: Blob): Promise<string> {
+/**
+ * Sends a page. On your Mac the answer is a job id to poll; on Vercel (no jobs) the request
+ * waits and answers with the finished reading.
+ */
+export async function startReading(file: Blob): Promise<{ id: string } | ReadProgress> {
   const res = await fetch("/api/read", { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
-  return (await json<{ id: string }>(res)).id;
+  return json<{ id: string } | ReadProgress>(res);
+}
+
+/** Shrinks a photo for upload (long side ≤ 2200 px, JPEG): phone photos are 3–12 MB. */
+export async function shrinkPhoto(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/") || file.size < 1.5 * 1024 * 1024) return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, 2200 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return blob ?? file;
+  } catch {
+    return file;
+  }
 }
 
 export const readProgress = (id: string) => fetch(`/api/read/${id}`, { cache: "no-store" }).then((r) => json<ReadProgress>(r));
