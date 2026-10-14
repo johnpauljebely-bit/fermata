@@ -84,11 +84,14 @@ function runAudiveris(job, args) {
     const child = spawn(job.reader, args, { env: { ...process.env, JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true" } });
     job.child = child;
     let buffer = "";
+    job.log = [];
     const feed = (data) => {
       buffer += data.toString();
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() ?? "";
       for (const line of lines) {
+        job.log.push(line.slice(0, 300));
+        if (job.log.length > 40) job.log.shift();
         const sheets = /\|\s+(\d+)\s+sheets?\s+in\s/.exec(line);
         if (sheets) job.pages = Number(sheets[1]);
         const step = /StepMonitoring\s+\d+\s+\|\s+([A-Z_]+)\s*$/.exec(line);
@@ -106,6 +109,7 @@ function runAudiveris(job, args) {
     child.on("error", () => resolve(-1));
     child.on("close", (code) => {
       job.child = undefined;
+      if (code !== 0) console.error(`Audiveris exited ${code}:\n${job.log.join("\n")}`);
       resolve(code ?? -1);
     });
   });

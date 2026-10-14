@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { cancelReading, getStatus, readProgress, shrinkPhoto, startReading, type AIAnswer, type ReadProgress, type Status } from "./api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { cancelReading, getStatus, pageUrl, readProgress, shrinkPhoto, startReading, type AIAnswer, type ReadProgress, type Status } from "./api";
 
 /**
  * Photo/PDF reading is being rebuilt. It stays on for local development (and can be turned on
@@ -8,8 +8,7 @@ import { cancelReading, getStatus, readProgress, shrinkPhoto, startReading, type
 const READING_OPEN = import.meta.env.DEV || import.meta.env.VITE_READING === "on";
 
 /** The splash wears one of the warm-up gradients, picked fresh on each load. */
-const SPLASH_GRADIENTS = ["g-glucose", "g-range", "g-candy", "g-vitamin", "g-stopwatch", "g-plus", "g-pull", "g-minus", "g-bloom", "g-sage"];
-const splashGradient = SPLASH_GRADIENTS[Math.floor(Math.random() * SPLASH_GRADIENTS.length)];
+const splashGradient = "g-minus";
 
 /** Uploads in flight, by the temporary id the reading screen starts with. */
 const uploads = new Map<string, Promise<{ id: string } | ReadProgress>>();
@@ -18,6 +17,7 @@ const pageReadings = new Map<string, PageReading>();
 import { prefetchPiano } from "./audio/piano";
 import { applyCheck, mergeScores, transcriptionToXml } from "./music/xml";
 import { ScoreScreen, type ScoreInfo } from "./ScoreScreen";
+import { listRecent, openRecent, removeRecent, saveRecent, type Recent } from "./recent";
 import { TunerTab } from "./TunerTab";
 import { WarmupsTab } from "./WarmupsTab";
 import { readPagePhoto, type PageReading } from "./omr/pageReader.ts";
@@ -52,8 +52,11 @@ export function App() {
   const [renovation, setRenovation] = useState(0);
   const libraryInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<Recent[]>([]);
+  const refreshRecent = () => void listRecent().then(setRecent);
 
   useEffect(() => {
+    refreshRecent();
     getStatus().then(setStatus, () => setStatus(null));
     void prefetchPiano().catch(() => undefined);
   }, []);
@@ -132,7 +135,10 @@ export function App() {
           setError(message);
           setScreen({ kind: "home" });
         }}
-        onDone={(xml, info) => setScreen({ kind: "score", xml, info })}
+        onDone={(xml, info) => {
+          setScreen({ kind: "score", xml, info });
+          void saveRecent(xml, info, pageUrl).then(refreshRecent);
+        }}
       />
     );
   else if (screen.kind === "score") page = <ScoreScreen xml={screen.xml} info={screen.info} onBack={() => setScreen({ kind: "home" })} />;
@@ -146,6 +152,12 @@ export function App() {
         onCamera={() => setCamera(true)}
         readingOpen={READING_OPEN}
         onClosed={() => setRenovation((n) => n + 1)}
+        recent={recent}
+        onRecent={(r) => {
+          setError(null);
+          setScreen({ kind: "score", ...openRecent(r) });
+        }}
+        onForget={(r) => void removeRecent(r.id).then(refreshRecent)}
       />
     );
 
@@ -243,6 +255,9 @@ function Home({
   onCamera,
   readingOpen,
   onClosed,
+  recent,
+  onRecent,
+  onForget,
 }: {
   status: Status | null;
   error: string | null;
@@ -251,6 +266,9 @@ function Home({
   onCamera: () => void;
   readingOpen: boolean;
   onClosed: () => void;
+  recent: Recent[];
+  onRecent: (r: Recent) => void;
+  onForget: (r: Recent) => void;
 }) {
   const camera = useRef<HTMLInputElement>(null);
   const files = useRef<HTMLInputElement>(null);
@@ -323,6 +341,8 @@ function Home({
         </div>
       </div>
 
+      {recent.length ? <RecentList items={recent} onOpen={onRecent} onForget={onForget} /> : null}
+
       {error ? (
         <p className="error" role="alert">
           {error}
@@ -331,6 +351,47 @@ function Home({
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
       <input ref={files} type="file" accept="application/pdf,image/*" hidden onChange={pick} />
     </main>
+  );
+}
+
+// ---------- recently read ----------
+
+function ago(t: number) {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "yesterday" : `${d} days ago`;
+}
+
+function RecentList({ items, onOpen, onForget }: { items: Recent[]; onOpen: (r: Recent) => void; onForget: (r: Recent) => void }) {
+  // Page thumbnails as object URLs, freed when the list changes.
+  const thumbs = useMemo(() => items.map((r) => (r.images[0] ? URL.createObjectURL(r.images[0]) : null)), [items]);
+  useEffect(() => () => thumbs.forEach((u) => u && URL.revokeObjectURL(u)), [thumbs]);
+  return (
+    <section className="recent" aria-label="Recently read">
+      <h2 className="recent-head">Recent</h2>
+      <ul className="recent-list">
+        {items.map((r, i) => (
+          <li key={r.id} className="recent-item">
+            <button className="recent-open" onClick={() => onOpen(r)}>
+              <span className="recent-thumb">{thumbs[i] ? <img src={thumbs[i]!} alt="" /> : <NoteIcon />}</span>
+              <span className="recent-text">
+                <span className="recent-title">{r.title}</span>
+                <span className="recent-when">{ago(r.savedAt)}</span>
+              </span>
+            </button>
+            <button className="recent-forget" aria-label={`Remove ${r.title}`} onClick={() => onForget(r)}>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M7 7l10 10M17 7L7 17" />
+              </svg>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

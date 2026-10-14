@@ -139,6 +139,10 @@ export function PagesView({
   const ellipse = (b: NoteBox, cls: string, key: string) => (
     <ellipse key={key} className={cls} cx={b.x + b.w / 2} cy={b.y + b.h / 2} rx={b.w * 0.85} ry={b.h * 0.85} />
   );
+  /** A shape centred on a notehead, `grow` times its size. */
+  const glow = (b: NoteBox, cls: string, key: string, fill: string, grow: number) => (
+    <ellipse key={key} className={cls} cx={b.x + b.w / 2} cy={b.y + b.h / 2} rx={(b.w / 2) * grow} ry={(b.h / 2) * grow} fill={fill} />
+  );
 
   return (
     <div className="pages">
@@ -194,6 +198,18 @@ export function PagesView({
               if (hit) onSing(hit.id, hit.midi);
             }}
           >
+            <defs>
+              {/* The app's hot pink → violet. */}
+              <linearGradient id={`ink-${pi}`} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#fe196b" />
+                <stop offset="100%" stopColor="#8c3af4" />
+              </linearGradient>
+              <radialGradient id={`halo-${pi}`}>
+                <stop offset="0%" stopColor="#ff9fcb" />
+                <stop offset="55%" stopColor="#ffd3e6" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+              </radialGradient>
+            </defs>
             {/* Muted parts: their noteheads are dimmed on the page. */}
             {muted.size
               ? allBoxes.filter((b) => b.page === pi && mutedEntry(b.entryId)).map((b, i) => (
@@ -201,8 +217,14 @@ export function PagesView({
                 ))
               : null}
             {[...selected].flatMap((id) => (boxes.get(id) ?? []).filter((b) => b.page === pi).map((b, i) => ellipse(b, "picked", `s${id}${i}`)))}
-            {cursorBoxes.filter((b) => b.page === pi).map((b, i) => ellipse(b, "head-cursor", `c${i}`))}
-            {activeBoxes.filter((b) => b.page === pi).map((b, i) => ellipse(b, "head-now", `a${b.entryId}${i}`))}
+            {/* The playing note's ink turns pink → violet (screen blend: only the black changes),
+                over a soft pink glow (multiply: the ink stays dark under it). */}
+            {[...cursorBoxes.map((b) => ({ b, cls: "head-cursor" })), ...activeBoxes.map((b) => ({ b, cls: "head-now" }))]
+              .filter(({ b }) => b.page === pi)
+              .flatMap(({ b, cls }, i) => [
+                glow(b, `${cls} head-halo`, `h${cls}${b.entryId}${i}`, `url(#halo-${pi})`, 3.6),
+                glow(b, `${cls} head-ink`, `i${cls}${b.entryId}${i}`, `url(#ink-${pi})`, 1.25),
+              ])}
             {needsCursor && focusBar && focusBar.page === pi ? (
               <>
                 <rect className={`now ${playing ? "playing" : ""}`} x={focusBar.left} y={focusBar.top} width={focusBar.right - focusBar.left} height={focusBar.bottom - focusBar.top} rx={10} />
