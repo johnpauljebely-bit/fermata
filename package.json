@@ -7,7 +7,8 @@
     "build": "tsc -p . && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p .",
-    "knowledge": "node scripts/build-knowledge.mjs"
+    "knowledge": "node scripts/build-knowledge.mjs",
+    "reader:bundle": "node scripts/bundle-reader.mjs"
   },
   "license": "MIT",
   "type": "module",

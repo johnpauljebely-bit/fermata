@@ -1,0 +1,8 @@
+{
+  "name": "fermata-reader",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "fflate": "^0.8.3"
+  }
+}

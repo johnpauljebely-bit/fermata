@@ -6,3 +6,6 @@ dist
 .env*.local
 # Your own (possibly copyrighted) scores
 public/my-scores/
+
+# Built for upload to Hugging Face (npm run reader:bundle)
+reader-space/

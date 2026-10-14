@@ -36,8 +36,12 @@ export interface Review {
   tips: string[];
 }
 
-const IN_TUNE = 25;
-const CLOSE = 60;
+// Generous windows: voices naturally move a little, and singing should feel rewarding.
+const IN_TUNE = 30;
+const CLOSE = 70;
+
+/** Lifts raw accuracy (0…1) onto a kinder curve: 50% raw ≈ 70, 80% raw ≈ 92. */
+const curve = (raw: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, raw)), 1.7);
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -84,8 +88,10 @@ export function buildReview(plan: Plan, samples: Sample[]): Review {
     const close = cents.filter((c) => Math.abs(c) <= CLOSE).length / cents.length;
     const firstGood = voicedSamples.find((s) => Math.abs((s.midi - octave * 12 - note.midi) * 100) <= IN_TUNE);
     const late = firstGood ? Math.max(0, firstGood.t - note.start) : null;
-    const score = Math.round(Math.min(100, (inTune * 0.75 + close * 0.25) * 100 * Math.min(1, voiced / 0.7)));
-    const verdict: Verdict = score >= 85 ? "great" : score >= 65 ? "good" : score >= 40 ? "close" : "off";
+    // Effort counts too: any voiced note earns a base, accuracy fills the rest.
+    const raw = (inTune * 0.65 + close * 0.35) * Math.min(1, voiced / 0.6);
+    const score = Math.round(Math.min(100, 20 + 80 * curve(raw)));
+    const verdict: Verdict = score >= 85 ? "great" : score >= 68 ? "good" : score >= 45 ? "close" : "off";
     const name = pitchFromMidi(note.midi).name;
     const dir = med > 0 ? "sharp (a bit high)" : "flat (a bit low)";
 
@@ -93,15 +99,15 @@ export function buildReview(plan: Plan, samples: Sample[]): Review {
     let body: string;
     let tip: string | null = null;
     if (verdict === "great") {
-      title = `${name}: lovely`;
+      title = `${name}: beautiful`;
       body = Math.abs(med) < 8 ? "Right in the centre of the note, and steady." : `In tune, sitting just slightly ${med > 0 ? "high" : "low"} (${Math.abs(Math.round(med))}¢).`;
     } else if (verdict === "good") {
-      title = `${name}: nicely done`;
-      body = `Mostly in tune, about ${Math.abs(Math.round(med))}¢ ${dir} on average.`;
+      title = `${name}: really nice`;
+      body = `Mostly in tune. You sat about ${Math.abs(Math.round(med))}¢ ${dir} on average, which is a small adjustment.`;
       tip = wobble > 35 ? "Hold the note a touch steadier: keep the air flowing evenly to the end." : med > 0 ? "Aim a hair lower: relax rather than push." : "Aim a hair higher: lift your eyebrows and think of the note above.";
     } else if (verdict === "close") {
-      title = `${name}: close`;
-      body = Math.abs(med) > IN_TUNE ? `You were around ${Math.abs(Math.round(med))}¢ ${dir}.` : "The middle was right, but the pitch moved around a lot.";
+      title = `${name}: so close`;
+      body = Math.abs(med) > IN_TUNE ? `Nearly there: you were around ${Math.abs(Math.round(med))}¢ ${dir}.` : "You found the right note; the pitch just moved around a bit.";
       tip =
         wobble > 45
           ? "The pitch wobbled. Relax your jaw and keep the breath low and steady."
@@ -109,12 +115,13 @@ export function buildReview(plan: Plan, samples: Sample[]): Review {
             ? "Going flat usually means running out of support: take a fuller breath and keep it bright."
             : "Going sharp usually means pushing: sing it lighter and let the note float.";
     } else {
-      title = `${name}: this one needs work`;
+      title = `${name}: good try`;
       const off = Math.abs(med) >= 100 ? `about ${Math.round(Math.abs(med) / 100)} semitone${Math.abs(med) >= 150 ? "s" : ""} ${med > 0 ? "above" : "below"} it` : `${Math.abs(Math.round(med))}¢ ${dir}`;
-      body = `You were ${off}.`;
+      body = `You were ${off}. That's very fixable.`;
       tip = "Hum the note quietly with the piano first, then sing it. Slowing the warm-up down can help too.";
     }
-    if (late !== null && late > 0.25 && verdict !== "great") tip = `You took ${late.toFixed(1)}s to land on it. Hear it in your head before you start, then aim straight for the middle.`;
+    if (late !== null && late > 0.25 && verdict !== "great") tip = `You got there, it just took ${late.toFixed(1)}s to land. Hear it in your head before you start, then aim straight for the middle.`;
+    if (tip) tip = `To make it even better: ${tip.charAt(0).toLowerCase()}${tip.slice(1)}`;
     if (octave !== 0) body += ` (You sang it an octave ${octave < 0 ? "lower" : "higher"}, which still counts.)`;
     return { index, note, score, verdict, cents: med, wobble, late, octave, voiced, title, body, tip };
   });
@@ -122,7 +129,7 @@ export function buildReview(plan: Plan, samples: Sample[]): Review {
   const heard = notes.filter((n) => n.verdict !== "silent");
   const score = notes.length ? Math.round(notes.reduce((s, n) => s + n.score, 0) / notes.length) : 0;
   const tips: string[] = [];
-  if (heard.length < notes.length * 0.5) tips.push("A lot of notes were too quiet to hear. Sing out, and use headphones.");
+  if (heard.length < notes.length * 0.5) tips.push("We couldn't hear quite a few notes. Sing out with confidence, and use headphones so the mic hears you.");
   // Leaning sharp/flat: only from notes you were near (wrong notes would swamp it).
   const near = heard.filter((n) => n.cents !== null && Math.abs(n.cents) < 80);
   const avg = near.length >= 3 ? near.reduce((s, n) => s + (n.cents ?? 0), 0) / near.length : 0;
@@ -138,11 +145,16 @@ export function buildReview(plan: Plan, samples: Sample[]): Review {
   if (heard.some((n) => n.wobble > 45)) tips.push("Some long notes wobbled. Practise long tones to build a steady stream of air.");
   const late = heard.filter((n) => n.late !== null && n.late > 0.25).length;
   if (late > heard.length * 0.3) tips.push("You often slid into notes. Aim for the centre of each note from the start.");
-  if (!tips.length && score >= 80) tips.push("Really solid. Try the next voice range up, or a faster exercise.");
+  if (!tips.length && score >= 80) tips.push("Really solid all the way through. Try the next voice range up, or a faster exercise.");
 
   const headline =
-    score >= 85 ? "Excellent" : score >= 70 ? "Really good" : score >= 50 ? "Getting there" : heard.length ? "Keep practising" : "We couldn't hear you";
-  return { notes, score, headline, tips: tips.slice(0, 3) };
+    score >= 88 ? "Brilliant" : score >= 75 ? "Really nice" : score >= 60 ? "Good work" : heard.length ? "Nice start" : "We couldn't hear you";
+  // Start with what went well.
+  const best = [...heard].sort((a, b) => b.score - a.score)[0];
+  const greats = heard.filter((n) => n.verdict === "great" || n.verdict === "good").length;
+  if (greats >= 3) tips.unshift(`${greats} of ${notes.length} notes were spot on or close to it. Nice work!`);
+  else if (best && best.score >= 60) tips.unshift(`Your best note was ${pitchFromMidi(best.note.midi).name}, really well placed.`);
+  return { notes, score, headline, tips: tips.slice(0, 4) };
 }
 
 export const VERDICT_COLOR: Record<Verdict, string> = {

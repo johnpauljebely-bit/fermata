@@ -216,7 +216,7 @@ async function runJob(job, keys) {
       const mode = job.pieces.length ? "check" : "transcribe";
       const context = job.pieces.length
         ? `THE MUSIC READER'S TRANSCRIPTION (bar by bar; q=quarter h=half w=whole 8=eighth 16=16th; "." = dotted; "~" = tied to next; "+" = chord):\n${summarizeScore(job.pieces).text}`
-        : "(no reader result)";
+        : job.hint || "(no reader result)";
       try {
         job.ai = { mode, ...(await askAI(keys, mode, context, images)) };
       } catch (error) {
@@ -273,7 +273,25 @@ async function readLayout(job) {
           return { x: Number(st[2]) + Number(sl[1]), beat: (Number(a) / Number(b)) * 4 };
         }),
       }));
-      systems.push({ top: Math.min(...ys), bottom: Math.max(...ys), measures });
+      // Staves (which part each belongs to, top to bottom) and every notehead with its box.
+      const staves = [];
+      for (const pm of body.matchAll(/<part id="(\d+)"[^>]*>([\s\S]*?)(?=<part id=|$)/g)) {
+        for (const st of pm[2].matchAll(/<staff id="(\d+)"[^>]*>([\s\S]*?)<\/staff>/g)) {
+          const sy = [...st[2].matchAll(/<line [^>]*>([\s\S]*?)<\/line>/g)].flatMap((l) => [...l[1].matchAll(/<point x="[\d.]+" y="([\d.]+)"/g)].map((q) => Number(q[1])));
+          if (sy.length) staves.push({ id: Number(st[1]), part: Number(pm[1]), top: Math.min(...sy), bottom: Math.max(...sy) });
+        }
+      }
+      staves.sort((a, b) => a.top - b.top);
+      const heads = [...body.matchAll(/<head pitch="(-?\d+)" shape="([A-Z_]+)"[^>]*staff="(\d+)"[^>]*>\s*<bounds x="(\d+)" y="(\d+)" w="(\d+)" h="(\d+)"/g)].map((hm) => ({
+        pitch: Number(hm[1]),
+        shape: hm[2],
+        staff: Number(hm[3]),
+        x: Number(hm[4]),
+        y: Number(hm[5]),
+        w: Number(hm[6]),
+        h: Number(hm[7]),
+      }));
+      systems.push({ top: Math.min(...ys), bottom: Math.max(...ys), measures, staves, heads });
     }
     pages.push({ page: n, width: Number(picture[1]), height: Number(picture[2]), systems });
   }
@@ -333,16 +351,31 @@ function progressOf(job) {
   return { prepare: 0.05, straighten: 0.12, recognize: 0.15 + recogShare * recog, ai: 0.15 + recogShare + 0.02 }[job.phase] ?? 0.02;
 }
 
-/** Vite plugin: mounts the API on the dev and preview servers. */
-export function snapPlayServer(keys) {
-  const handle = async (req, res, next) => {
+/** The API as a plain Node request handler (used by the Vite plugin and by reader/server.mjs). */
+export function createHandler(keys) {
+  return async (req, res, next) => {
     const url = new URL(req.url ?? "/", "http://x");
     if (!url.pathname.startsWith("/api/")) return next();
     try {
       if (req.method === "GET" && url.pathname === "/api/status") {
         return json(res, 200, { reader: Boolean(findAudiveris()), straighten: Boolean(findMagick()), ai: aiProviders(keys) });
       }
-      if (req.method === "POST" && url.pathname === "/api/read") {
+      if (req.method === "POST" && (url.pathname === "/api/read-line" || url.pathname === "/api/read-page")) {
+        const pageMode = url.pathname === "/api/read-page";
+        if (!aiProviders(keys).gemini && !aiProviders(keys).groq) return json(res, 503, { error: "No AI key yet (add one to .env.local)." });
+        const hint = (url.searchParams.get("hint") ?? "").slice(0, 6000);
+        const bytes = await readBody(req);
+        try {
+          const ai = await askAI(keys, pageMode ? "page" : "line", `DETECTOR:\n${hint}`, [{ mime: "image/jpeg", base64: bytes.toString("base64") }]);
+          return json(res, 200, { provider: ai.provider, model: ai.model, result: ai.result });
+        } catch (error) {
+          return json(res, 502, { error: error.message });
+        }
+      }
+      // /api/read-sync: the same reading, but answered in one request when it's finished (with the
+      // page images inline). For hosts that only give CPU during a request, like Google Cloud Run.
+      const sync = url.pathname === "/api/read-sync";
+      if (req.method === "POST" && (url.pathname === "/api/read" || sync)) {
         cleanup();
         const bytes = await readBody(req);
         const kind = sniff(bytes);
@@ -355,11 +388,30 @@ export function snapPlayServer(keys) {
         await fs.mkdir(path.join(dir, "out"), { recursive: true });
         const input = path.join(dir, `upload.${kind}`);
         await fs.writeFile(input, bytes);
-        const job = { id, dir, input, kind, bytes, reader, state: "queued", phase: "queued", pages: 1, pageDone: 0, stepIndex: -1, pieces: [], started: Date.now(), hasAI: providers.gemini || providers.groq };
+        const hint = (url.searchParams.get("hint") ?? "").slice(0, 2000);
+        const job = { id, dir, input, kind, bytes, reader, hint, state: "queued", phase: "queued", pages: 1, pageDone: 0, stepIndex: -1, pieces: [], started: Date.now(), hasAI: providers.gemini || providers.groq };
         jobs.set(id, job);
         queue.push(job);
         pump(keys);
-        return json(res, 202, { id });
+        if (!sync) return json(res, 202, { id });
+        while (job.state === "queued" || job.state === "running") await new Promise((r) => setTimeout(r, 400));
+        if (job.state !== "done") return json(res, 200, { state: job.state, error: job.error ?? "Reading stopped." });
+        const images = (await pageImages(job)).map((png) => `data:image/png;base64,${Buffer.from(png).toString("base64")}`);
+        return json(res, 200, {
+          state: "done",
+          phase: job.phase,
+          progress: 1,
+          pages: job.pages,
+          seconds: Math.round(((job.finished ?? Date.now()) - job.started) / 1000),
+          queuePosition: 0,
+          error: null,
+          pieces: job.pieces,
+          pageCount: images.length,
+          pageImages: images,
+          layout: job.layout ?? null,
+          ai: job.ai ?? null,
+          aiError: job.aiError ?? null,
+        });
       }
       const m = /^\/api\/read\/([0-9a-f-]{36})(?:\/(page)\/(\d+)|\/(cancel))?$/.exec(url.pathname);
       const job = m && jobs.get(m[1]);
@@ -396,6 +448,11 @@ export function snapPlayServer(keys) {
       return json(res, error?.message === "too-large" ? 413 : 500, { error: error?.message === "too-large" ? "That file is over 40 MB." : String(error) });
     }
   };
+}
+
+/** Vite plugin: mounts the API on the dev and preview servers. */
+export function snapPlayServer(keys) {
+  const handle = createHandler(keys);
   return {
     name: "snap-play-server",
     configureServer(server) {

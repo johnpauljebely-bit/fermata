@@ -15,13 +15,27 @@ function sniff(b) {
 
 const done = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
+const READER = (process.env.READER_URL ?? "").replace(/\/$/, "");
+
 export async function POST(request) {
+  // A hosted reader (Audiveris on Google Cloud Run) is configured: it reads the page within
+  // this one request and answers with the finished reading, page images included.
+  if (READER) {
+    const res = await fetch(`${READER}/api/read-sync${new URL(request.url).search}`, {
+      method: "POST",
+      headers: { "x-fermata-key": process.env.READER_SECRET ?? "", "Content-Type": "application/octet-stream" },
+      body: await request.arrayBuffer(),
+    });
+    return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  }
   const started = Date.now();
   const keys = { geminiKey: process.env.GEMINI_API_KEY, groqKey: process.env.GROQ_API_KEY };
   const providers = aiProviders(keys);
   if (!providers.gemini && !providers.groq) {
     return done({ error: "This deployment has no AI key yet. Add GEMINI_API_KEY (and/or GROQ_API_KEY) in Vercel → Settings → Environment Variables." }, 503);
   }
+  // Fermata's page reader (in the browser) sends how many lines and bars the page has.
+  const hint = (new URL(request.url).searchParams.get("hint") ?? "").slice(0, 2000);
   const bytes = new Uint8Array(await request.arrayBuffer());
   const mime = sniff(bytes);
   if (!mime) return done({ error: "That isn't a photo or a PDF." }, 415);
@@ -29,7 +43,7 @@ export async function POST(request) {
 
   const base = { phase: "ai", progress: 1, pages: 1, queuePosition: 0, pieces: [], pageCount: 0, layout: null };
   try {
-    const ai = await askAI(keys, "transcribe", "(no reader result: read the page yourself)", [{ mime, base64: Buffer.from(bytes).toString("base64") }]);
+    const ai = await askAI(keys, "transcribe", hint || "(no reader result: read the page yourself)", [{ mime, base64: Buffer.from(bytes).toString("base64") }]);
     return done({ ...base, state: "done", seconds: Math.round((Date.now() - started) / 1000), error: null, ai: { mode: "transcribe", ...ai }, aiError: null });
   } catch (error) {
     return done({ ...base, state: "error", seconds: Math.round((Date.now() - started) / 1000), error: `The AI couldn't read that page: ${error.message}` });

@@ -2,7 +2,7 @@ import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Expression, PageLayout } from "./api";
 import { PagesView } from "./PagesView";
-import { play, setRate, stop, strike } from "./audio/player";
+import { play, playMidi, setRate, stop, strike } from "./audio/player";
 import { buildTimeline, type Entry, type Timeline } from "./music/timeline";
 import { readMarks } from "./music/xml";
 import { SingSheet } from "./sing/SingSheet";
@@ -18,7 +18,7 @@ export interface ScoreInfo {
   addedMarks?: number;
   skipped?: { afterMeasure: number; count: number; where?: string }[];
   /** Your own pages (from the reader), shown as the score by default. */
-  pages?: { jobId: string; layout: PageLayout };
+  pages?: { jobId?: string; images?: string[]; layout: PageLayout };
 }
 
 type WithSvg = { getSVGGElement?: () => SVGGElement | undefined };
@@ -40,7 +40,8 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
   const [sing, setSing] = useState<{ midi: number; label: string } | null>(null);
   const active = useRef<string[]>([]);
   const [activeIds, setActiveIds] = useState<string[]>([]);
-  const [view, setView] = useState<"pages" | "score">(info.pages ? "pages" : "score");
+  // Photos are their own score; only the sample uses the engraved view.
+  const view: "pages" | "score" = info.pages ? "pages" : "score";
   const viewRef = useRef(view);
   viewRef.current = view;
   const title = useRef(info.title);
@@ -175,7 +176,7 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
   };
 
   // Press and hold (phone) or right-click (computer): sing that note.
-  const openSing = (id: string) => {
+  const openSing = (id: string, midi?: number) => {
     const entry = timeline?.byId.get(id);
     if (!entry) return;
     if (playing) {
@@ -187,7 +188,7 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
     setCursor(id);
     navigator.vibrate?.(15);
     const top = entry.pitches.reduce((a, b) => (b.midi > a.midi ? b : a));
-    setSing({ midi: top.midi, label: `Bar ${entry.measureIndex + 1} · ${timeline!.staves[entry.staffIndex]?.label ?? ""}` });
+    setSing({ midi: midi ?? top.midi, label: `Bar ${entry.measureIndex + 1} · ${timeline!.staves[entry.staffIndex]?.label ?? ""}` });
   };
 
   const down = useRef<{ x: number; y: number; timer: number; long: boolean } | null>(null);
@@ -300,42 +301,23 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
       ) : null}
       {!timeline && !error ? <div className="score-loading">Laying out the music…</div> : null}
 
-      {info.pages && timeline ? (
-        <div className="view-switch" role="tablist" aria-label="View">
-          <button role="tab" aria-selected={view === "pages"} className={view === "pages" ? "on" : ""} onClick={() => setView("pages")}>
-            Your pages
-          </button>
-          <button
-            role="tab"
-            aria-selected={view === "score"}
-            className={view === "score" ? "on" : ""}
-            onClick={() => {
-              setView("score");
-              // The engraved score was laid out while hidden; lay it out again at full size.
-              requestAnimationFrame(() => {
-                render();
-                if (timeline) mapElements(timeline);
-                paint();
-              });
-            }}
-          >
-            Clean score
-          </button>
-        </div>
-      ) : null}
 
       {view === "pages" && info.pages && timeline ? (
         <PagesView
           jobId={info.pages.jobId}
+          images={info.pages.images}
           layout={info.pages.layout}
           timeline={timeline}
           active={activeIds}
           cursor={cursor}
           playing={playing}
           selected={selected}
-          onTap={(id) => {
+          muted={muted}
+          onTap={(id, midi) => {
             const entry = timeline.byId.get(id)!;
-            void strike(entry, 1);
+            // Tapped a notehead: hear just that note (not the whole chord).
+            if (midi !== undefined) void playMidi([midi], 1.2, 0, Math.max(0.5, entry.velocity));
+            else void strike(entry, 1);
             navigator.vibrate?.(8);
             if (selectMode) {
               setSelected((s) => {

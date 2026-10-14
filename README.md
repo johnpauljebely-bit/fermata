@@ -8,9 +8,9 @@ It runs two ways:
 
 | | **On your Mac** (`npm run dev`) | **On Vercel** |
 |---|---|---|
-| Reads notes with | Audiveris + AI check | AI (Gemini, Groq as backup) |
+| Reads notes with | Audiveris + AI check | Audiveris on Cloud Run (below), or the AI alone |
 | Page straightening | yes | – |
-| "Your pages" view | yes | clean score only |
+| "Your pages" view with notes lit on the photo | yes | yes, with the hosted reader |
 | Tuner, warm-ups, sing a note | yes | yes |
 
 ## Deploy on Vercel
@@ -21,6 +21,28 @@ It runs two ways:
 
 Photos are shrunk in the browser before upload (Vercel accepts up to 4.5 MB per request).
 PDFs need the Gemini key.
+
+## The hosted reader (Audiveris on Google Cloud Run, free tier)
+
+This gives the Vercel site the same quality as the Mac: Audiveris reads the notes and reports
+where every notehead is, so playback lights up the real notes on your photo. Each reading runs
+inside one request (Cloud Run only gives CPU during requests), so it scales to zero when unused.
+
+1. Google Cloud: create a project and turn on billing (needed even for the free tier). Add a
+   budget alert under Billing → Budgets (e.g. $1) so nothing surprises you.
+2. `brew install --cask google-cloud-sdk`, then `gcloud auth login` and
+   `gcloud config set project <your project id>`.
+3. Make a secret: `openssl rand -hex 24`.
+4. From this folder:
+   ```bash
+   npm run reader:bundle
+   gcloud run deploy fermata-reader --source reader-space --region us-central1 --memory 4Gi --cpu 2 --timeout 600 --concurrency 2 --max-instances 2 --allow-unauthenticated --set-env-vars READER_SECRET=<your secret>
+   ```
+   (Optionally add `,GEMINI_API_KEY=…` for the reader's AI check.) It prints the service URL.
+5. Vercel → Settings → Environment Variables: `READER_URL` = that URL, `READER_SECRET` = the
+   same secret. Redeploy.
+
+The first reading after a quiet spell takes longer while Cloud Run starts the reader.
 
 ## Run it on your Mac
 

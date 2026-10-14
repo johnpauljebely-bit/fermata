@@ -83,6 +83,62 @@ Reply with ONE JSON object, nothing else:
 
 Rules: "pitches" is [] for a rest; several pitches = a chord. duration is one of whole, half, quarter, eighth, 16th, 32nd. Apply the key signature and accidentals yourself (write the sounding pitch, e.g. "F#4"). Every bar of every part must add up to the time signature (a pickup bar may be shorter). All parts must have the same number of bars; staves bracketed together on one line play at the same time. Read every line on every page in order — do not skip lines.`;
 
+const LINE_TASK = `TASK: the image is ONE line (system) of sheet music, cropped from a page. Transcribe exactly this line for playback.
+Fermata's page detector has already measured the line (see DETECTOR below): how many staves it has and where its bars are.
+Use that as ground truth for the structure: return exactly that many bars, left to right, and one entry per staff (top to bottom).
+
+Reply with ONE JSON object, nothing else:
+{
+  "staves": [ { "clef": "treble" | "bass" | "treble8vb" | "alto" | "tenor", "key": <fifths, e.g. -1 for one flat>, "name": string | null } ],
+  "time": { "beats": number, "beatType": number } | null,
+  "tempo": { "bpm": number | null, "text": string | null } | null,
+  "bars": [
+    {
+      "multiRest": <number of bars if this box is a multi-bar rest, else omit>,
+      "staves": [
+        { "voices": [ [ { "pitches": ["E4"], "duration": "quarter", "dots": 0, "tie": false } ] ] }
+      ]
+    }
+  ],
+  "expressions": [ { "type": "dynamic" | "crescendo" | "diminuendo" | "articulation" | "ritardando" | "accelerando", "value": "p|mf|f|staccato|accent|fermata…", "bar": 1, "beat": 1, "staff": 1, "endBar": 2, "endBeat": 1 } ]
+}
+
+Rules:
+- "pitches": [] means a rest. Several pitches = a chord (same stem). duration: whole, half, quarter, eighth, 16th, 32nd.
+- Write SOUNDING-letter pitches with octave (e.g. "F#4", "Bb3"), applying the key signature, accidentals and the clef (use the mnemonics in the reference: treble lines E G B D F, spaces F A C E; bass lines G B D F A, spaces A C E G).
+- Two independent melodies on one staff (stems up and stems down) are two voices. Each voice of each bar should add up to the time signature (a pickup bar may be shorter).
+- "tie": true when the note is tied to the next one.
+- Bars are numbered from 1 within this line. Read every bar; do not skip or merge bars.`;
+
+const PAGE_TASK = `TASK: the image is one page of sheet music (already straightened). Transcribe it for playback, line by line.
+Fermata's page detector has already measured every line (system) of music on the page (see DETECTOR below): how many staves each line has and how many bars.
+Use that as ground truth for the structure: return exactly that many lines, top to bottom; in each line exactly that many bars (left to right) and one entry per staff (top to bottom).
+Pitches matter less than rhythm here: the detector measures notehead positions precisely and will correct pitches, so take most care over durations, dots, rests, ties, voices and the clef/key.
+
+Reply with ONE JSON object, nothing else:
+{
+  "title": string | null,
+  "tempo": { "bpm": number | null, "text": string | null } | null,
+  "time": { "beats": number, "beatType": number } | null,
+  "lines": [
+    {
+      "staves": [ { "clef": "treble" | "bass" | "treble8vb" | "alto" | "tenor", "key": <fifths, e.g. -1 for one flat>, "name": string | null } ],
+      "time": { "beats": number, "beatType": number } | null,
+      "bars": [
+        { "multiRest": <bars, only for a multi-bar rest box>, "staves": [ { "voices": [ [ { "pitches": ["E4"], "duration": "quarter", "dots": 0, "tie": false } ] ] } ] }
+      ],
+      "expressions": [ { "type": "dynamic" | "crescendo" | "diminuendo" | "articulation" | "ritardando" | "accelerando", "value": "p|mf|f|staccato|accent|fermata…", "bar": 1, "beat": 1, "staff": 1, "endBar": 2, "endBeat": 1 } ]
+    }
+  ]
+}
+
+Rules:
+- "pitches": [] is a rest. Several pitches = a chord (one stem). duration: whole, half, quarter, eighth, 16th, 32nd.
+- Pitches with octave, sounding letter (e.g. "F#4", "Bb3"), applying key signature, accidentals and clef.
+- Two independent melodies on one staff (stems up and stems down) are two voices. Each voice of each bar adds up to the time signature (a pickup bar may be shorter).
+- "tie": true when tied to the next note. Bars are numbered from 1 within each line.
+- Read every line and every bar. Never skip or merge.`;
+
 function parseJson(text) {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   try {
@@ -235,7 +291,7 @@ export function aiProviders(keys) {
  * @param {{ mime: string, base64: string }[]} images  page images (or a PDF for Gemini)
  */
 export async function askAI(keys, mode, context, images) {
-  const task = mode === "check" ? CHECK_TASK : TRANSCRIBE_TASK;
+  const task = mode === "check" ? CHECK_TASK : mode === "line" ? LINE_TASK : mode === "page" ? PAGE_TASK : TRANSCRIBE_TASK;
   const errors = [];
   if (keys.geminiKey) {
     try {

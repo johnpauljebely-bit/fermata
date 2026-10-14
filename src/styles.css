@@ -1841,3 +1841,338 @@ img.brand {
   padding: 28px 12px 0;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.92) 30%, #000 100%);
 }
+
+/* ---------- notes lit directly on your photo ---------- */
+.page .head-now {
+  fill: rgba(254, 25, 107, 0.28);
+  stroke: #fe196b;
+  stroke-width: 3;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(254, 25, 107, 0.8));
+  animation: head-pop 180ms var(--ease);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.page .head-cursor {
+  fill: rgba(229, 236, 126, 0.35);
+  stroke: #b8a800;
+  stroke-width: 3;
+  pointer-events: none;
+}
+.page .muted-head {
+  fill: rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+@keyframes head-pop {
+  from {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page .head-now {
+    animation: none;
+  }
+}
+
+/* ---------- splash ---------- */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  overflow: hidden;
+  background: #000;
+  transition: opacity 650ms var(--ease), filter 650ms var(--ease), transform 650ms var(--ease);
+}
+.splash.leaving {
+  opacity: 0;
+  filter: blur(10px);
+  transform: scale(1.04);
+  pointer-events: none;
+}
+/* The gradient, oversized and drifting slowly (the "slight motion"). */
+.splash-bg {
+  position: absolute;
+  inset: -25%;
+  border-radius: 0;
+  animation: splash-drift 7s ease-in-out infinite alternate, splash-fade 900ms var(--ease) both;
+}
+.splash-bg::after {
+  /* a soft dark vignette keeps the white logo crisp on the lighter gradients */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.06) 65%, rgba(0, 0, 0, 0.22) 100%);
+}
+@keyframes splash-drift {
+  from {
+    transform: translate(-4%, -3%) scale(1) rotate(-3deg);
+  }
+  to {
+    transform: translate(4%, 3%) scale(1.12) rotate(4deg);
+  }
+}
+@keyframes splash-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The logo, rebuilt from the full-resolution artwork (sharp on every screen). */
+.splash-mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(74vw, 400px);
+  filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.25));
+  animation: mark-settle 2200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.splash-icon {
+  width: 22.76%; /* 279 / 1226 of the wordmark */
+  height: auto;
+  /* whooshes in from the left, past its spot, and settles */
+  animation: icon-whoosh 900ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
+}
+.splash-text {
+  display: block;
+  width: 72.51%; /* 889 / 1226 */
+  margin-left: 4.73%; /* the gap: 58 / 1226 */
+  overflow: hidden;
+  /* the word wipes in from the left, behind the icon */
+  clip-path: inset(0 100% 0 0);
+  animation: text-wipe 800ms cubic-bezier(0.65, 0, 0.35, 1) 700ms both;
+}
+.splash-text img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.splash-tag {
+  position: relative;
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
+  animation: tag-up 700ms var(--ease) 1350ms both;
+}
+.splash-tag .dots {
+  font-size: 1.15rem;
+}
+@keyframes mark-settle {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes icon-whoosh {
+  0% {
+    opacity: 0;
+    transform: translateX(-140%) rotate(-25deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(6%) rotate(4deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes text-wipe {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes tag-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-bg,
+  .splash-mark,
+  .splash-icon,
+  .splash-text,
+  .splash-tag {
+    animation: none;
+    clip-path: none;
+  }
+}
+
+/* ---------- camera ---------- */
+.camera {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+  overflow: hidden;
+}
+.camera video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Darken everything outside the page window. */
+.camera-shade {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 58% 46% at 50% 47%, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.55) 100%);
+  pointer-events: none;
+}
+.camera-frame {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  width: min(80vw, calc(62dvh / 1.41));
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+}
+.camera-frame path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 260ms var(--ease);
+}
+.camera-frame path {
+  stroke-width: 4px;
+}
+/* Staves in view: the corners light up with the yellow marker colour and a soft glow. */
+.camera.is-good .camera-frame path {
+  stroke: var(--marker);
+  filter: drop-shadow(0 0 6px rgba(229, 236, 126, 0.8));
+}
+.camera-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(14px, env(safe-area-inset-top)) 16px 0;
+}
+.camera-title {
+  font-size: 1.05rem;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+.round-btn.glass {
+  background: rgba(20, 20, 20, 0.5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.round-btn.ghost {
+  visibility: hidden;
+}
+.camera-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 9px 16px;
+  border-radius: var(--r-pill);
+  font-size: 0.9rem;
+  color: #fff;
+  white-space: nowrap;
+  background: rgba(20, 20, 20, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transition: color 200ms;
+}
+.camera.is-good .camera-hint {
+  color: var(--marker);
+}
+.camera-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 24px max(30px, env(safe-area-inset-bottom));
+}
+/* Shutter: white ring, solid core that dips when pressed. */
+.shutter {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 4px #fff;
+  transition: transform 140ms var(--ease), opacity 160ms;
+}
+.shutter i {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms var(--ease), background 200ms;
+}
+.camera.is-good .shutter i {
+  background: radial-gradient(circle at 40% 35%, #fff 0%, #f3f0b0 60%, #e5ec7e 100%);
+}
+.shutter:active i {
+  transform: scale(0.86);
+}
+.shutter:disabled {
+  opacity: 0.4;
+}
+.camera-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: cam-flash 260ms ease-out forwards;
+  pointer-events: none;
+}
+@keyframes cam-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ---------- under renovation ---------- */
+.renovation .sheet-body {
+  gap: 12px;
+}
+.renovation-card {
+  display: grid;
+  gap: 10px;
+  padding: 26px 22px 20px;
+  min-height: 150px;
+  align-content: end;
+}
+.renovation p {
+  margin: 0;
+  line-height: 1.45;
+}
+.renovation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.renovation-actions .pill-btn {
+  min-width: 0;
+}

@@ -50,7 +50,15 @@ export interface PageLayout {
     page: number;
     width: number;
     height: number;
-    systems: { top: number; bottom: number; measures: { id: number; left: number; right: number; slots: { x: number; beat: number }[] }[] }[];
+    systems: {
+      top: number;
+      bottom: number;
+      measures: { id: number; left: number; right: number; slots: { x: number; beat: number }[] }[];
+      /** Staves top to bottom, with the (1-based) part each belongs to. From the Mac/hosted reader. */
+      staves?: { id: number; part: number; top: number; bottom: number }[];
+      /** Every notehead the reader found, with its box (page pixels) and staff id. */
+      heads?: { x: number; y: number; w: number; h: number; staff: number; pitch: number; shape: string }[];
+    }[];
   }[];
 }
 
@@ -64,6 +72,8 @@ export interface ReadProgress {
   error: string | null;
   pieces?: string[];
   pageCount?: number;
+  /** Page images inline (one-request readings from a hosted reader). */
+  pageImages?: string[];
   layout?: PageLayout | null;
   ai?: AIAnswer | null;
   aiError?: string | null;
@@ -81,8 +91,9 @@ export const getStatus = () => fetch("/api/status").then((r) => json<Status>(r))
  * Sends a page. On your Mac the answer is a job id to poll; on Vercel (no jobs) the request
  * waits and answers with the finished reading.
  */
-export async function startReading(file: Blob): Promise<{ id: string } | ReadProgress> {
-  const res = await fetch("/api/read", { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
+export async function startReading(file: Blob, hint?: string): Promise<{ id: string } | ReadProgress> {
+  const url = hint ? `/api/read?hint=${encodeURIComponent(hint)}` : "/api/read";
+  const res = await fetch(url, { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
   return json<{ id: string } | ReadProgress>(res);
 }
 

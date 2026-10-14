@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { cancelReading, getStatus, readProgress, shrinkPhoto, startReading, type AIAnswer, type ReadProgress, type Status } from "./api";
 
+/**
+ * Photo/PDF reading is being rebuilt. It stays on for local development (and can be turned on
+ * for a deployment with VITE_READING=on); elsewhere the two tiles show "under renovation".
+ */
+const READING_OPEN = import.meta.env.DEV || import.meta.env.VITE_READING === "on";
+
+/** The splash wears one of the warm-up gradients, picked fresh on each load. */
+const SPLASH_GRADIENTS = ["g-glucose", "g-range", "g-candy", "g-vitamin", "g-stopwatch", "g-plus", "g-pull", "g-minus", "g-bloom", "g-sage"];
+const splashGradient = SPLASH_GRADIENTS[Math.floor(Math.random() * SPLASH_GRADIENTS.length)];
+
 /** Uploads in flight, by the temporary id the reading screen starts with. */
 const uploads = new Map<string, Promise<{ id: string } | ReadProgress>>();
+/** What Fermata's own page reader found, by upload id (shown as "Your pages"). */
+const pageReadings = new Map<string, PageReading>();
 import { prefetchPiano } from "./audio/piano";
 import { applyCheck, mergeScores, transcriptionToXml } from "./music/xml";
 import { ScoreScreen, type ScoreInfo } from "./ScoreScreen";
 import { TunerTab } from "./TunerTab";
 import { WarmupsTab } from "./WarmupsTab";
-import { BackButton, Dial, Ruler } from "./ui";
+import { readPagePhoto, type PageReading } from "./omr/pageReader.ts";
+import { Camera } from "./photo/Camera";
+import { BackButton, Dial, PillButton, Ruler } from "./ui";
 
 type Tab = "play" | "tuner" | "warmups";
 
@@ -25,7 +39,7 @@ export function App() {
   });
   const setScreen = (next: Screen) => {
     // Only real reading ids go in the address (temporary upload ids can't be reopened).
-    const realId = (id: string) => (/^[0-9a-f-]{36}$/.test(id) ? id : null);
+    const realId = (id?: string) => (id && /^[0-9a-f-]{36}$/.test(id) ? id : null);
     const id = next.kind === "reading" ? realId(next.id) : next.kind === "score" && next.info.pages ? realId(next.info.pages.jobId) : null;
     const hash = id ? `#read=${id}` : "";
     history.replaceState(null, "", hash || location.pathname + location.search);
@@ -33,6 +47,10 @@ export function App() {
   };
   const [status, setStatus] = useState<Status | null>(null);
   const [tab, setTab] = useState<Tab>("play");
+  const [camera, setCamera] = useState(false);
+  // Counts taps, so each tap opens a fresh popup (0 = closed).
+  const [renovation, setRenovation] = useState(0);
+  const libraryInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,7 +64,24 @@ export function App() {
     // Show the reading screen straight away; the upload (and, on Vercel, the whole reading)
     // happens behind it. Hosted uploads are shrunk to fit Vercel's request limit.
     const key = `upload-${Date.now()}`;
-    uploads.set(key, (status?.hosted ? shrinkPhoto(file) : Promise.resolve(file)).then(startReading));
+    const ownReader = status ? !status.reader : false;
+    uploads.set(
+      key,
+      ownReader
+        ? // No Audiveris (Vercel): our page reader straightens the photo and counts lines and
+          // bars; the AI reads the straightened page with that as a guide.
+          readPagePhoto(file)
+            .catch(() => null)
+            .then(async (page) => {
+              if (page) {
+                pageReadings.set(key, page);
+                return startReading(page.image, page.hint);
+              }
+              return startReading(await shrinkPhoto(file));
+            })
+        : // The reader (Audiveris on your Mac, or hosted). Through Vercel, photos must fit 4.5 MB.
+          (status?.hosted ? shrinkPhoto(file) : Promise.resolve(file)).then((f) => startReading(f)),
+    );
     setScreen({ kind: "reading", id: key, preview, name: file.name.replace(/\.[^.]+$/, "") });
   };
 
@@ -56,7 +91,34 @@ export function App() {
   };
 
   let page: React.ReactNode;
-  if (tab === "tuner") page = <TunerTab />;
+  if (camera)
+    page = (
+      <>
+        <Camera
+          onCapture={(photo) => {
+            setCamera(false);
+            read(photo);
+          }}
+          onLibrary={() => libraryInput.current?.click()}
+          onClose={() => setCamera(false)}
+        />
+        <input
+          ref={libraryInput}
+          type="file"
+          accept="application/pdf,image/*"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) {
+              setCamera(false);
+              read(f);
+            }
+          }}
+        />
+      </>
+    );
+  else if (tab === "tuner") page = <TunerTab />;
   else if (tab === "warmups") page = <WarmupsTab />;
   else if (screen.kind === "reading")
     page = (
@@ -74,14 +136,64 @@ export function App() {
       />
     );
   else if (screen.kind === "score") page = <ScoreScreen xml={screen.xml} info={screen.info} onBack={() => setScreen({ kind: "home" })} />;
-  else page = <Home status={status} error={error} onFile={read} onSample={openSample} />;
+  else
+    page = (
+      <Home
+        status={status}
+        error={error}
+        onFile={read}
+        onSample={openSample}
+        onCamera={() => setCamera(true)}
+        readingOpen={READING_OPEN}
+        onClosed={() => setRenovation((n) => n + 1)}
+      />
+    );
+
+  const [splash, setSplash] = useState<"on" | "leaving" | "off">(() =>
+    matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on",
+  );
+  useEffect(() => {
+    if (splash !== "on") return;
+    // The logo animation runs ~2.2 s; hold a beat, then fade into the app.
+    const t1 = setTimeout(() => setSplash("leaving"), 2700);
+    const t2 = setTimeout(() => setSplash("off"), 3350);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The tab bar sits under the top-level pages; a score or a reading has the screen to itself.
-  const showTabs = tab !== "play" || screen.kind === "home";
+  const showTabs = !camera && (tab !== "play" || screen.kind === "home");
   return (
     <div className={showTabs ? "has-tabs" : ""}>
       {page}
       {showTabs ? <TabBar tab={tab} onTab={setTab} /> : null}
+      {renovation ? (
+        <Renovation
+          key={renovation}
+          onClose={() => setRenovation(0)}
+          onSample={() => {
+            setRenovation(0);
+            void openSample();
+          }}
+        />
+      ) : null}
+      {splash !== "off" ? (
+        <div className={`splash ${splash === "leaving" ? "leaving" : ""}`} aria-hidden>
+          {/* A different warm-up gradient each time, drifting slowly. */}
+          <div className={`splash-bg ${splashGradient}`} />
+          <div className="splash-mark">
+            <img className="splash-icon" src="/brand/mark-icon.png" alt="" />
+            <span className="splash-text">
+              <img src="/brand/mark-text.png" alt="" />
+            </span>
+          </div>
+          <p className="splash-tag">
+            <span className="dots">fermata</span> your all-in-one voice tool
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -123,7 +235,23 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
 
 // ---------- home ----------
 
-function Home({ status, error, onFile, onSample }: { status: Status | null; error: string | null; onFile: (f: File) => void; onSample: () => void }) {
+function Home({
+  status,
+  error,
+  onFile,
+  onSample,
+  onCamera,
+  readingOpen,
+  onClosed,
+}: {
+  status: Status | null;
+  error: string | null;
+  onFile: (f: File) => void;
+  onSample: () => void;
+  onCamera: () => void;
+  readingOpen: boolean;
+  onClosed: () => void;
+}) {
   const camera = useRef<HTMLInputElement>(null);
   const files = useRef<HTMLInputElement>(null);
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,7 +270,10 @@ function Home({ status, error, onFile, onSample }: { status: Status | null; erro
 
       <div className="bento">
         {/* The "Reminder" card: pink bloom, dot-matrix word in the dark core. */}
-        <button className="tile g-bloom tile-hero" onClick={() => camera.current?.click()}>
+        <button
+          className="tile g-bloom tile-hero"
+          onClick={() => (!readingOpen ? onClosed() : "mediaDevices" in navigator && window.isSecureContext ? onCamera() : camera.current?.click())}
+        >
           <span className="tile-label">Take a photo</span>
           <span className="tile-core">
             <span className="dots dots-xl">snap</span>
@@ -153,7 +284,7 @@ function Home({ status, error, onFile, onSample }: { status: Status | null; erro
         </button>
 
         {/* The sensor card: sage glow, dial of ticks, white button. */}
-        <button className="tile g-sage tile-pick" onClick={() => files.current?.click()}>
+        <button className="tile g-sage tile-pick" onClick={() => (readingOpen ? files.current?.click() : onClosed())}>
           <span className="tile-label">PDF or picture</span>
           <Dial size={132} ticks={60} progress={0}>
             <span className="knob">
@@ -203,6 +334,38 @@ function Home({ status, error, onFile, onSample }: { status: Status | null; erro
   );
 }
 
+// ---------- under renovation ----------
+
+function Renovation({ onClose, onSample }: { onClose: () => void; onSample: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={ref} className="sheet renovation" onClose={onClose} onClick={(e) => e.target === ref.current && ref.current.close()}>
+      <div className="sheet-body">
+        <span className="grabber" aria-hidden />
+        <div className="tile g-stopwatch renovation-card">
+          <span className="dots dots-l">soon</span>
+          <span className="tile-label">Under renovation</span>
+        </div>
+        <p>
+          Reading photos and PDFs is being rebuilt so it's far more accurate, with every note lit up right on your own page.
+        </p>
+        <p className="muted">Meanwhile, try the sample song, the Tuner and the Warm-ups.</p>
+        <div className="renovation-actions">
+          <button className="link" onClick={() => ref.current?.close()}>
+            Got it
+          </button>
+          <PillButton icon="play" tone="glow" onClick={onSample}>
+            Play the sample
+          </PillButton>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 // ---------- reading ----------
 
 const PHASES: { key: ReadProgress["phase"][]; label: string }[] = [
@@ -244,6 +407,9 @@ function Reading({
         done.current = true;
         try {
           const { xml, info } = finish(next, name, jobId ?? id);
+          const own = pageReadings.get(id);
+          pageReadings.delete(id);
+          if (own && !info.pages) info.pages = { images: [own.imageUrl], layout: own.layout };
           onDone(xml, info);
         } catch (e) {
           onFail((e as Error).message);
@@ -315,7 +481,7 @@ function Reading({
           : p
             ? `${p.seconds}s · ${p.pages > 1 ? `${p.pages} pages · ` : ""}bigger pages take a minute or two`
             : waiting && elapsed > 4
-              ? `${Math.round(elapsed)}s · the AI is reading the whole page`
+              ? `${Math.round(elapsed)}s · reading the whole page (about a minute)`
               : "Uploading…"}
       </p>
     </main>
@@ -330,7 +496,7 @@ function finish(p: ReadProgress, name: string, id: string): { xml: string; info:
     ai: ai ? { provider: ai.provider, model: ai.model, notes: ai.result.notes, confidence: ai.result.confidence } : undefined,
     aiError: p.aiError ?? undefined,
     expressions: ai?.result.expressions ?? [],
-    pages: p.layout?.pages.length && p.pageCount ? { jobId: id, layout: p.layout } : undefined,
+    pages: p.layout?.pages.length && p.pageCount ? (p.pageImages?.length ? { images: p.pageImages, layout: p.layout } : { jobId: id, layout: p.layout }) : undefined,
   };
   if (p.pieces?.length) {
     let xml = p.pieces.length > 1 ? mergeScores(p.pieces) : p.pieces[0];

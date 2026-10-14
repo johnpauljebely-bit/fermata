@@ -10,6 +10,8 @@ export interface Entry {
   measureIndex: number;
   staffIndex: number;
   partIndex: number;
+  /** Which staff of its part (0 = top; piano left hand = 1). */
+  staffInPart: number;
   /** Seconds from the start at 1× (after fermatas and rit./accel.). */
   start: number;
   duration: number;
@@ -78,6 +80,7 @@ export function buildTimeline(sheet: MusicSheet, marks: Mark[], expressions: Exp
   };
 
   const staffPart = sheet.Staves.map((s) => Math.max(0, sheet.Instruments.indexOf(s.ParentInstrument)));
+  const staffInPart = sheet.Staves.map((s) => Math.max(0, s.ParentInstrument?.Staves.indexOf(s) ?? 0));
   const loudness = dynamicsCurves(marks, timeAt, end);
   const partWithMarks = loudness.findIndex((c) => c.segments.length > 0);
 
@@ -126,6 +129,7 @@ export function buildTimeline(sheet: MusicSheet, marks: Mark[], expressions: Exp
             measureIndex,
             staffIndex,
             partIndex,
+            staffInPart: staffInPart[staffIndex] ?? 0,
             start,
             barQuarter: local,
             duration: lengthQ * mt.quarter,

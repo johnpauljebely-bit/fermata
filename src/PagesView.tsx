@@ -1,58 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { pageUrl, type PageLayout } from "./api";
 import type { Entry, Timeline } from "./music/timeline";
-
-/** One bar on a page, in that page's pixels. */
-interface BarBox {
-  index: number;
-  /** Bars of the music it stands for (several for a multi-bar rest), 0-based. */
-  first: number;
-  last: number;
-  page: number;
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-  /** The staves' own top and bottom (no padding), to tell which staff a tap was on. */
-  staffTop: number;
-  staffBottom: number;
-  slots: { x: number; beat: number }[];
-}
-
-function barsFrom(layout: PageLayout): BarBox[] {
-  const bars: BarBox[] = [];
-  let offset = 0;
-  layout.pages.forEach((p, page) => {
-    let previous = 0;
-    let highest = 0;
-    for (const sys of p.systems) {
-      const pad = Math.max(14, (sys.bottom - sys.top) * 0.2);
-      for (const m of sys.measures) {
-        const id = m.id ?? previous + 1;
-        if (id <= previous) continue; // duplicate of a box already placed
-        const first = offset + previous;
-        const last = offset + Math.max(id, previous + 1) - 1;
-        previous = Math.max(id, previous + 1);
-        highest = Math.max(highest, previous);
-        bars.push({
-          index: bars.length,
-          first,
-          last,
-          page,
-          left: m.left,
-          right: m.right,
-          top: sys.top - pad,
-          bottom: sys.bottom + pad,
-          staffTop: sys.top,
-          staffBottom: sys.bottom,
-          slots: [...m.slots].sort((a, b) => a.beat - b.beat),
-        });
-      }
-    }
-    offset += highest;
-  });
-  return bars;
-}
+import { barsFrom, matchNotes, type BarBox, type NoteBox } from "./photo/match";
 
 /** x of a beat inside a bar, between the note positions the reader found. */
 function xAtBeat(bar: BarBox, beat: number, barBeats: number): number {
@@ -66,37 +15,47 @@ function xAtBeat(bar: BarBox, beat: number, barBeats: number): number {
 }
 
 /**
- * Your own pages as the score: the playing bar lights up with a cursor on the beat.
- * Tap a bar to hear it / play from it; hold (or right-click) a note to sing it.
+ * Your own pages are the score. While playing, the actual noteheads on your photo light up.
+ * Tap a note on the page to hear it; hold it (or right-click) to sing it.
+ * Where a note couldn't be tied to a notehead, its bar lights up with a cursor on the beat.
  */
 export function PagesView({
   jobId,
+  images,
   layout,
   timeline,
   active,
   cursor,
   selected,
+  muted,
   playing,
   onTap,
   onSing,
 }: {
-  jobId: string;
+  jobId?: string;
+  /** Our own straightened pages (Vercel / phone); otherwise the reader's page images. */
+  images?: string[];
   layout: PageLayout;
   timeline: Timeline;
   active: string[];
   cursor: string | null;
   selected: Set<string>;
+  muted: Set<number>;
   playing: boolean;
-  onTap: (id: string) => void;
-  onSing: (id: string) => void;
+  onTap: (id: string, midi?: number) => void;
+  onSing: (id: string, midi?: number) => void;
 }) {
   const bars = useMemo(() => barsFrom(layout), [layout]);
+  const boxes = useMemo(() => matchNotes(timeline, layout), [timeline, layout]);
+  const allBoxes = useMemo(() => [...boxes.values()].flat(), [boxes]);
+  // Dev builds: expose the matching for inspection.
+  if (import.meta.env.DEV) Object.assign(window, { __fermata: { boxes, timeline, layout, bars } });
   const byMeasure = useMemo(() => {
     const map = new Map<number, Entry[]>();
     for (const e of timeline.entries) map.set(e.measureIndex, [...(map.get(e.measureIndex) ?? []), e]);
     return map;
   }, [timeline]);
-  const nowRefs = useRef<(SVGRectElement | null)[]>([]);
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const userScrolledAt = useRef(0);
 
   useEffect(() => {
@@ -115,50 +74,84 @@ export function PagesView({
       ? bar.left + ((bar.right - bar.left) * (entry.measureIndex - bar.first + 0.5)) / (bar.last - bar.first + 1)
       : xAtBeat(bar, entry.barQuarter, timeline.barQuarters[entry.measureIndex] ?? 4);
 
-  // What's lit: the playing bar (or the tapped note's bar), and a cursor at the note.
+  // What's lit. Prefer the real noteheads; fall back to the bar + a cursor.
+  const activeBoxes = active.flatMap((id) => boxes.get(id) ?? []);
+  const cursorBoxes = !playing && cursor ? (boxes.get(cursor) ?? []) : [];
   const focusEntry = timeline.byId.get(active[0] ?? "") ?? (!playing ? timeline.byId.get(cursor ?? "") : undefined);
   const focusBar = barOf(focusEntry);
+  const needsCursor = !!focusEntry && !(boxes.get(focusEntry.id)?.length);
   const cursorX = focusBar && focusEntry ? xOf(focusBar, focusEntry) : 0;
 
-  // Keep the playing bar in view, unless you've just scrolled yourself.
+  // Keep the playing note in view (unless you've just scrolled yourself).
+  const focusKey = activeBoxes[0] ? `${activeBoxes[0].page}:${Math.round(activeBoxes[0].y / 40)}` : focusBar ? `${focusBar.page}:${focusBar.system}` : "";
   useEffect(() => {
-    if (!playing || !focusBar) return;
+    if (!playing || !focusKey) return;
     if (performance.now() - userScrolledAt.current < 4000) return;
-    const r = nowRefs.current[focusBar.page]?.getBoundingClientRect();
+    const page = activeBoxes[0]?.page ?? focusBar?.page ?? 0;
+    const el = pageRefs.current[page];
+    const p = layout.pages[page];
+    if (!el || !p) return;
+    const r = el.getBoundingClientRect();
+    const scale = r.height / p.height;
+    const y = activeBoxes[0] ? activeBoxes[0].y : (focusBar?.top ?? 0);
+    const yOnScreen = r.top + y * scale;
     const dock = document.querySelector(".dock")?.getBoundingClientRect().top ?? window.innerHeight;
-    if (r && r.height > 0 && (r.top < 64 || r.bottom > dock - 12)) {
+    if (yOnScreen < 90 || yOnScreen > dock - 60) {
       window.scrollTo({
-        top: Math.max(0, window.scrollY + r.top - Math.min(140, dock * 0.22)),
+        top: Math.max(0, window.scrollY + yOnScreen - Math.min(200, dock * 0.3)),
         behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
     }
-  }, [focusBar, playing]);
+  }, [focusKey, playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tap → nearest note in that bar (on the staff you touched); hold → sing it.
-  const pick = (svg: SVGSVGElement, clientX: number, clientY: number, page: number): string | null => {
+  // A tap or hold: the nearest notehead (generous target), else the nearest note in that bar.
+  const pick = (svg: SVGSVGElement, clientX: number, clientY: number, page: number): { id: string; midi?: number } | null => {
     const pt = svg.createSVGPoint();
     pt.x = clientX;
     pt.y = clientY;
     const p = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+    let best: NoteBox | null = null;
+    let bestD = Infinity;
+    for (const b of allBoxes) {
+      if (b.page !== page) continue;
+      const d = Math.hypot(p.x - (b.x + b.w / 2), p.y - (b.y + b.h / 2));
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    const reach = best ? Math.max(best.w, best.h) * 1.8 : 0;
+    if (best && bestD <= reach) return { id: best.entryId, midi: best.midi };
     const bar = bars.find((b) => b.page === page && p.x >= b.left - 6 && p.x <= b.right + 6 && p.y >= b.top && p.y <= b.bottom);
     if (!bar) return null;
     const entries: Entry[] = [];
     for (let m = bar.first; m <= bar.last; m++) entries.push(...(byMeasure.get(m) ?? []));
     if (!entries.length) return null;
-    const staves = timeline.staves.length;
-    const staff = Math.max(0, Math.min(staves - 1, Math.floor(((p.y - bar.staffTop) / Math.max(1, bar.staffBottom - bar.staffTop)) * staves)));
-    const own = entries.filter((e) => e.staffIndex === staff);
-    const pool = own.length ? own : entries;
-    return pool.reduce((a, b) => (Math.abs(xOf(bar, b) - p.x) < Math.abs(xOf(bar, a) - p.x) ? b : a)).id;
+    return { id: entries.reduce((a, b) => (Math.abs(xOf(bar, b) - p.x) < Math.abs(xOf(bar, a) - p.x) ? b : a)).id };
   };
 
   const press = useRef<{ x: number; y: number; timer: number; long: boolean } | null>(null);
+  const mutedEntry = (id: string) => {
+    const e = timeline.byId.get(id);
+    return !!e && muted.has(e.staffIndex);
+  };
+
+  const ellipse = (b: NoteBox, cls: string, key: string) => (
+    <ellipse key={key} className={cls} cx={b.x + b.w / 2} cy={b.y + b.h / 2} rx={b.w * 0.85} ry={b.h * 0.85} />
+  );
 
   return (
     <div className="pages">
       {layout.pages.map((page, pi) => (
-        <div key={pi} className="page" style={{ aspectRatio: `${page.width} / ${page.height}` }}>
-          <img src={pageUrl(jobId, pi + 1)} alt={`Page ${pi + 1}`} draggable={false} />
+        <div
+          key={pi}
+          ref={(el) => {
+            pageRefs.current[pi] = el;
+          }}
+          className="page"
+          style={{ aspectRatio: `${page.width} / ${page.height}` }}
+        >
+          <img src={images?.[pi] ?? pageUrl(jobId ?? "", pi + 1)} alt={`Page ${pi + 1}`} draggable={false} />
           <svg
             viewBox={`0 0 ${page.width} ${page.height}`}
             preserveAspectRatio="none"
@@ -169,10 +162,10 @@ export function PagesView({
               const d = { x: clientX, y: clientY, long: false, timer: 0 };
               if (e.pointerType === "touch") {
                 d.timer = window.setTimeout(() => {
-                  const id = press.current === d ? pick(svg, clientX, clientY, pi) : null;
-                  if (id) {
+                  const hit = press.current === d ? pick(svg, clientX, clientY, pi) : null;
+                  if (hit) {
                     d.long = true;
-                    onSing(id);
+                    onSing(hit.id, hit.midi);
                   }
                 }, 450);
               }
@@ -191,37 +184,28 @@ export function PagesView({
               if (!d) return;
               clearTimeout(d.timer);
               if (d.long) return;
-              const id = pick(e.currentTarget, e.clientX, e.clientY, pi);
-              if (id) onTap(id);
+              const hit = pick(e.currentTarget, e.clientX, e.clientY, pi);
+              if (hit) onTap(hit.id, hit.midi);
             }}
             onPointerCancel={() => (press.current = null)}
             onContextMenu={(e) => {
               e.preventDefault();
-              const id = pick(e.currentTarget, e.clientX, e.clientY, pi);
-              if (id) onSing(id);
+              const hit = pick(e.currentTarget, e.clientX, e.clientY, pi);
+              if (hit) onSing(hit.id, hit.midi);
             }}
           >
-            {[...selected].map((id) => {
-              const e = timeline.byId.get(id);
-              const bar = barOf(e);
-              if (!e || !bar || bar.page !== pi) return null;
-              const staves = timeline.staves.length;
-              const h = (bar.staffBottom - bar.staffTop) / staves;
-              return <circle key={id} className="picked" cx={xOf(bar, e)} cy={bar.staffTop + h * (e.staffIndex + 0.5)} r={Math.max(14, h * 0.32)} />;
-            })}
-            {focusBar && focusBar.page === pi ? (
+            {/* Muted parts: their noteheads are dimmed on the page. */}
+            {muted.size
+              ? allBoxes.filter((b) => b.page === pi && mutedEntry(b.entryId)).map((b, i) => (
+                  <rect key={`m${i}`} className="muted-head" x={b.x - b.w * 0.2} y={b.y - b.h * 0.2} width={b.w * 1.4} height={b.h * 1.4} rx={b.h} />
+                ))
+              : null}
+            {[...selected].flatMap((id) => (boxes.get(id) ?? []).filter((b) => b.page === pi).map((b, i) => ellipse(b, "picked", `s${id}${i}`)))}
+            {cursorBoxes.filter((b) => b.page === pi).map((b, i) => ellipse(b, "head-cursor", `c${i}`))}
+            {activeBoxes.filter((b) => b.page === pi).map((b, i) => ellipse(b, "head-now", `a${b.entryId}${i}`))}
+            {needsCursor && focusBar && focusBar.page === pi ? (
               <>
-                <rect
-                  ref={(el) => {
-                    nowRefs.current[pi] = el;
-                  }}
-                  className={`now ${playing ? "playing" : ""}`}
-                  x={focusBar.left}
-                  y={focusBar.top}
-                  width={focusBar.right - focusBar.left}
-                  height={focusBar.bottom - focusBar.top}
-                  rx={10}
-                />
+                <rect className={`now ${playing ? "playing" : ""}`} x={focusBar.left} y={focusBar.top} width={focusBar.right - focusBar.left} height={focusBar.bottom - focusBar.top} rx={10} />
                 <line className="cursor" x1={cursorX} x2={cursorX} y1={focusBar.top} y2={focusBar.bottom} />
               </>
             ) : null}
@@ -230,7 +214,7 @@ export function PagesView({
       ))}
       {bars.length && bars[bars.length - 1].last + 1 !== timeline.barQuarters.length ? (
         <p className="pages-note">
-          The pages show {bars[bars.length - 1].last + 1} bars and the music has {timeline.barQuarters.length}, so the highlight may drift a little. “Clean score” is exact.
+          The pages show {bars[bars.length - 1].last + 1} bars and the music has {timeline.barQuarters.length}, so some highlights may be off.
         </p>
       ) : null}
     </div>
