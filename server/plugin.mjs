@@ -91,6 +91,8 @@ function runAudiveris(job, args) {
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         job.log.push(line.slice(0, 300));
+        const low = /too low interline value of (\d+)/.exec(line);
+        if (low) job.lowInterline = Number(low[1]);
         if (job.log.length > 40) job.log.shift();
         const sheets = /\|\s+(\d+)\s+sheets?\s+in\s/.exec(line);
         if (sheets) job.pages = Number(sheets[1]);
@@ -109,7 +111,7 @@ function runAudiveris(job, args) {
     child.on("error", () => resolve(-1));
     child.on("close", (code) => {
       job.child = undefined;
-      if (code !== 0) console.error(`Audiveris exited ${code}:\n${job.log.join("\n")}`);
+      if (code !== 0) console.error(`Audiveris exited ${code}: ${job.log.join(" || ")}`);
       resolve(code ?? -1);
     });
   });
@@ -120,7 +122,7 @@ function normalizePhoto(job) {
   const magick = findMagick();
   if (!magick) return job.input;
   const out = path.join(job.dir, "photo.png");
-  execFileSync(magick, [job.input, "-auto-orient", "-resize", "3200x3200>", "-colorspace", "Gray", out]);
+  execFileSync(magick, [job.input, "-auto-orient", "-resize", "4800x4800>", "-colorspace", "Gray", out]);
   return out;
 }
 
@@ -171,6 +173,7 @@ async function runJob(job, keys) {
       job.phase = "prepare";
       source = normalizePhoto(job);
     }
+    const photo = source; // before straightening (enlarging works best from the gray photo)
 
     // 1. The music reader (Audiveris), on straightened pages.
     if (job.reader) {
@@ -193,7 +196,21 @@ async function runJob(job, keys) {
       job.phase = "recognize";
       job.stepIndex = -1;
       job.pageDone = 0;
+      job.lowInterline = 0;
       await runAudiveris(job, [...base, "-export", "-output", path.join(job.dir, "out"), "--", source]);
+      // Staff lines too close together (a small photo): enlarge so they're ~20 px apart, once.
+      const magick = findMagick();
+      if (job.lowInterline && job.kind !== "pdf" && magick && !stopped() && !(await findFiles(path.join(job.dir, "out"), ".mxl")).length) {
+        const bigger = path.join(job.dir, "bigger.png");
+        // Audiveris won't load very large images: stay under ~16 megapixels.
+        const [w, h] = execFileSync(magick, ["identify", "-format", "%w %h", photo]).toString().split(" ").map(Number);
+        const pct = Math.round(Math.min(4, 20 / job.lowInterline, Math.sqrt(16e6 / (w * h))) * 100);
+        execFileSync(magick, [photo, "-colorspace", "Gray", "-resize", `${pct}%`, bigger]);
+        await fs.rm(path.join(job.dir, "out"), { recursive: true, force: true });
+        job.stepIndex = -1;
+        job.pageDone = 0;
+        await runAudiveris(job, [...base, "-export", "-output", path.join(job.dir, "out"), "--", bigger]);
+      }
       for (const mxl of await findFiles(path.join(job.dir, "out"), ".mxl")) {
         const files = unzipSync(new Uint8Array(await fs.readFile(mxl)));
         const root = /full-path="([^"]+)"/.exec(strFromU8(files["META-INF/container.xml"] ?? new Uint8Array()))?.[1];

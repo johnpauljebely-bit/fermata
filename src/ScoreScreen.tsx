@@ -1,4 +1,5 @@
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
+import { PlayOrb } from "./PlayOrb";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Expression, PageLayout } from "./api";
 import { PagesView } from "./PagesView";
@@ -393,6 +394,7 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
               {selectMode ? (selected.size ? `${selected.size} picked` : "Tap notes") : "Pick notes"}
             </button>
             <button className={`play ${playing ? "is-playing" : ""}`} onClick={togglePlay} aria-label={playing ? "Stop" : "Play"} disabled={selectMode && !selected.size}>
+              <PlayOrb playing={playing} pulse={activeIds} />
               {playing ? (
                 <svg viewBox="0 0 24 24" width="26" height="26">
                   <rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" />

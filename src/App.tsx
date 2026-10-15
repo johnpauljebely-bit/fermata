@@ -17,6 +17,7 @@ const pageReadings = new Map<string, PageReading>();
 import { prefetchPiano } from "./audio/piano";
 import { applyCheck, mergeScores, transcriptionToXml } from "./music/xml";
 import { ScoreScreen, type ScoreInfo } from "./ScoreScreen";
+import { preparePhoto } from "./photo/prepare.ts";
 import { listRecent, openRecent, removeRecent, saveRecent, type Recent } from "./recent";
 import { TunerTab } from "./TunerTab";
 import { WarmupsTab } from "./WarmupsTab";
@@ -82,8 +83,12 @@ export function App() {
               }
               return startReading(await shrinkPhoto(file));
             })
-        : // The reader (Audiveris on your Mac, or hosted). Through Vercel, photos must fit 4.5 MB.
-          (status?.hosted ? shrinkPhoto(file) : Promise.resolve(file)).then((f) => startReading(f)),
+        : // The reader (Audiveris on your Mac, or hosted). Photos are cropped to the music and
+          // scaled so the staff lines are far enough apart for it (and fit Vercel's 4.5 MB).
+          (file.type.startsWith("image/")
+            ? preparePhoto(file).then((p) => p ?? (status?.hosted ? shrinkPhoto(file) : file))
+            : Promise.resolve(file)
+          ).then((f) => startReading(f)),
     );
     setScreen({ kind: "reading", id: key, preview, name: file.name.replace(/\.[^.]+$/, "") });
   };

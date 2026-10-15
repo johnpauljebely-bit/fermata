@@ -18,7 +18,8 @@ export function Camera({ onCapture, onLibrary, onClose }: { onCapture: (photo: F
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+          // 4:3 is the whole sensor; asking for 16:9 makes phones crop (it looks zoomed in).
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 4032 }, height: { ideal: 3024 }, aspectRatio: { ideal: 4 / 3 } },
           audio: false,
         });
         if (!alive) return stream.getTracks().forEach((t) => t.stop());
