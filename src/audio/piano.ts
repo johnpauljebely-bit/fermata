@@ -20,10 +20,29 @@ export function prefetchPiano() {
   return prefetch;
 }
 
+// 50 ms of silence. Playing it from a tap makes iOS treat the page as media playback, so web
+// audio isn't muted by the ring/silent switch (older iOS ignores navigator.audioSession).
+const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+let silentClip: HTMLAudioElement | null = null;
+function playSilence() {
+  try {
+    silentClip ??= Object.assign(new Audio(SILENCE), { preload: "auto" });
+    silentClip.currentTime = 0;
+    void silentClip.play().catch(() => undefined);
+  } catch {
+    // no HTML audio: nothing to do
+  }
+}
+
 /** Call straight from a tap, before any await (iOS only lets sound start inside a gesture). */
 export function unlockAudio(): Promise<void> {
   setAudioSession("playback");
-  return Tone.getContext().state === "running" ? Promise.resolve() : Tone.start();
+  playSilence();
+  // iOS can leave the context "suspended" or "interrupted" (calls, other apps, locking the
+  // phone); resume it on every tap until it's really running.
+  const ctx = Tone.getContext();
+  if (ctx.state === "running") return Promise.resolve();
+  return Tone.start().catch(() => (ctx.rawContext as AudioContext).resume?.());
 }
 
 type AudioSessionType = "playback" | "play-and-record" | "auto";
