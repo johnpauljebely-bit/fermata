@@ -1,0 +1,357 @@
+:root {
+  --bg: #000;
+  --surface: #1a1a1a;
+  --surface-2: #222;
+  --line: #2a2a2a;
+  --ink: #f4f4f4;
+  --ink-2: rgba(244, 244, 244, 0.7);
+  --ink-3: rgba(244, 244, 244, 0.5);
+  /* chart colours (checked for colour-blind separation on this surface) */
+  --c1: #5b8ff0;
+  --c2: #e8485f;
+  --danger: #ff7b8c;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 1rem/1.5 "Inter Tight", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+.muted {
+  color: var(--ink-3);
+}
+.error {
+  color: var(--danger);
+}
+
+/* ---------- sign in ---------- */
+.center {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.login {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 10px;
+  padding: 28px 24px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+  box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.login img {
+  height: 26px;
+  width: auto;
+  justify-self: start;
+}
+.login h1 {
+  margin: 4px 0 10px;
+  font-size: 1.6rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.login label {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.login input {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 0;
+  background: #0d0d0d;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.login input:focus-visible {
+  outline: 2px solid var(--c1);
+  outline-offset: 2px;
+}
+.login button {
+  height: 48px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-weight: 500;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms;
+}
+.login button:active {
+  transform: scale(0.97);
+}
+.login button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.login .error {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+}
+
+/* ---------- dashboard ---------- */
+.dash {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px 64px;
+}
+.dash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 20px;
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.brand img {
+  height: 26px;
+  width: auto;
+  align-self: center;
+}
+.brand span {
+  color: var(--ink-3);
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.seg {
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.seg button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.seg button.on {
+  background: #fff;
+  color: #000;
+}
+.ghost {
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.ghost:hover,
+.ghost:focus-visible {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.tile {
+  display: grid;
+  gap: 2px;
+  padding: 18px 20px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+  box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.tile-label {
+  color: var(--ink-2);
+}
+.tile-value {
+  font-family: "Doto", "Inter Tight", monospace;
+  font-weight: 900;
+  font-size: 2.6rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.tile-foot {
+  color: var(--ink-3);
+  font-size: 0.85rem;
+}
+
+.card {
+  padding: 20px;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  margin-bottom: 10px;
+  min-width: 0;
+}
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+.note {
+  margin: 12px 0 0;
+  color: var(--ink-3);
+  font-size: 0.85rem;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.grid2 .card {
+  margin: 0;
+}
+
+.setup ol {
+  padding-left: 1.2em;
+  color: var(--ink-2);
+}
+.setup li {
+  margin: 8px 0;
+}
+.setup strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---------- charts ---------- */
+.chart {
+  position: relative;
+}
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.chart .baseline {
+  stroke: #444;
+  stroke-width: 1;
+}
+.chart .axis {
+  fill: var(--ink-3);
+  font-size: 11px;
+}
+.chart .hit {
+  fill: transparent;
+}
+.chart rect:not(.hit) {
+  transition: opacity 120ms;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  margin: -4px 0 10px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.legend i,
+.tip i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.tip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -100%);
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #2a2a2a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.list li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.list-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(91, 143, 240, 0.16);
+  border-radius: 10px;
+}
+.list-label,
+.list-value {
+  position: relative;
+}
+.list-label {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+}
+th {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

@@ -90,10 +90,13 @@ function runAudiveris(job, args) {
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() ?? "";
       for (const line of lines) {
-        job.log.push(line.slice(0, 300));
+        // Keep what explains a failure (warnings, scale, measures), not the stack traces.
+        if (/WARN|Scale\{|raw measures|Loaded image|interline/.test(line) && !/^\s*at /.test(line) && !/OCR|Languages|Error in export|Exit forced|Exception on/.test(line)) {
+          job.log.push(line.replace(/^\S+\s+\[[^\]]*\]\s+/, "").slice(0, 240));
+          if (job.log.length > 30) job.log.shift();
+        }
         const low = /too low interline value of (\d+)/.exec(line);
         if (low) job.lowInterline = Number(low[1]);
-        if (job.log.length > 40) job.log.shift();
         const sheets = /\|\s+(\d+)\s+sheets?\s+in\s/.exec(line);
         if (sheets) job.pages = Number(sheets[1]);
         const step = /StepMonitoring\s+\d+\s+\|\s+([A-Z_]+)\s*$/.exec(line);
@@ -111,7 +114,7 @@ function runAudiveris(job, args) {
     child.on("error", () => resolve(-1));
     child.on("close", (code) => {
       job.child = undefined;
-      if (code !== 0) console.error(`Audiveris exited ${code}: ${job.log.join(" || ")}`);
+      if (code !== 0) console.error(`Audiveris exited ${code}: ${job.log.join(" | ")}`);
       resolve(code ?? -1);
     });
   });
@@ -198,18 +201,24 @@ async function runJob(job, keys) {
       job.pageDone = 0;
       job.lowInterline = 0;
       await runAudiveris(job, [...base, "-export", "-output", path.join(job.dir, "out"), "--", source]);
-      // Staff lines too close together (a small photo): enlarge so they're ~20 px apart, once.
+      // Didn't read? Try once more from the plain photo (straightening can make things worse),
+      // enlarged so the staff lines are ~20 px apart if Audiveris said they were too close.
       const magick = findMagick();
-      if (job.lowInterline && job.kind !== "pdf" && magick && !stopped() && !(await findFiles(path.join(job.dir, "out"), ".mxl")).length) {
-        const bigger = path.join(job.dir, "bigger.png");
+      job.attempts = 1;
+      if (job.kind !== "pdf" && magick && !stopped() && !(await findFiles(path.join(job.dir, "out"), ".mxl")).length) {
+        const retry = path.join(job.dir, "retry.png");
         // Audiveris won't load very large images: stay under ~16 megapixels.
         const [w, h] = execFileSync(magick, ["identify", "-format", "%w %h", photo]).toString().split(" ").map(Number);
-        const pct = Math.round(Math.min(4, 20 / job.lowInterline, Math.sqrt(16e6 / (w * h))) * 100);
-        execFileSync(magick, [photo, "-colorspace", "Gray", "-resize", `${pct}%`, bigger]);
-        await fs.rm(path.join(job.dir, "out"), { recursive: true, force: true });
-        job.stepIndex = -1;
-        job.pageDone = 0;
-        await runAudiveris(job, [...base, "-export", "-output", path.join(job.dir, "out"), "--", bigger]);
+        const want = job.lowInterline ? Math.min(4, 20 / job.lowInterline) : 1;
+        const pct = Math.round(Math.min(want, Math.sqrt(16e6 / (w * h))) * 100);
+        if (job.lowInterline || source !== photo) {
+          execFileSync(magick, [photo, "-colorspace", "Gray", "-resize", `${pct}%`, retry]);
+          await fs.rm(path.join(job.dir, "out"), { recursive: true, force: true });
+          job.stepIndex = -1;
+          job.pageDone = 0;
+          job.attempts = 2;
+          await runAudiveris(job, [...base, "-export", "-output", path.join(job.dir, "out"), "--", retry]);
+        }
       }
       for (const mxl of await findFiles(path.join(job.dir, "out"), ".mxl")) {
         const files = unzipSync(new Uint8Array(await fs.readFile(mxl)));
@@ -262,6 +271,12 @@ async function runJob(job, keys) {
   }
   clearTimeout(timer);
   job.finished = Date.now();
+  // One line per reading (no image data): what came in and how it went.
+  console.log(
+    `Reading ${job.state}: ${job.kind}, ${Math.round((job.bytes?.length ?? 0) / 1024)} KB, ${job.attempts ?? 0} tries, ` +
+      `${job.pieces.length} piece(s), AI ${job.ai?.mode ?? (job.aiError ? `error: ${job.aiError}` : "off")}, ` +
+      `${Math.round((job.finished - job.started) / 1000)} s${job.error ? `, "${job.error}"` : ""}`,
+  );
   job.bytes = undefined;
   pump(keys);
 }
@@ -416,8 +431,17 @@ export function createHandler(keys) {
         pump(keys);
         if (!sync) return json(res, 202, { id });
         while (job.state === "queued" || job.state === "running") await new Promise((r) => setTimeout(r, 400));
-        if (job.state !== "done") return json(res, 200, { state: job.state, error: job.error ?? "Reading stopped." });
+        // One-request readings keep nothing: the upload and its files go as soon as we answer.
+        const forget = () => {
+          jobs.delete(id);
+          void fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+        };
+        if (job.state !== "done") {
+          forget();
+          return json(res, 200, { state: job.state, error: job.error ?? "Reading stopped." });
+        }
         const images = (await pageImages(job)).map((png) => `data:image/png;base64,${Buffer.from(png).toString("base64")}`);
+        forget();
         return json(res, 200, {
           state: "done",
           phase: job.phase,

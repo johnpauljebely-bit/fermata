@@ -1,5 +1,6 @@
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import { PlayOrb } from "./PlayOrb";
+import { track } from "./analytics";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Expression, PageLayout } from "./api";
 import { PagesView } from "./PagesView";
@@ -178,6 +179,7 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
 
   // Press and hold (phone) or right-click (computer): sing that note.
   const openSing = (id: string, midi?: number) => {
+    track("sing");
     const entry = timeline?.byId.get(id);
     if (!entry) return;
     if (playing) {
@@ -257,6 +259,7 @@ export function ScoreScreen({ xml, info, onBack }: { xml: string; info: ScoreInf
       return;
     }
     setTapped(null);
+    track("play");
     let list = audible;
     let from = 0;
     if (selectMode && selected.size) {

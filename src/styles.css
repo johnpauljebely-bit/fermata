@@ -2428,3 +2428,21 @@ img.brand {
 .play.is-playing .orb-face .orb-spin:nth-child(-n + 2) {
   transform: none;
 }
+
+/* ---------- home: terms & privacy link ---------- */
+.home-legal {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.home-legal a {
+  color: var(--ink-3);
+  text-decoration: none;
+  padding: 8px 10px;
+}
+.home-legal a:hover,
+.home-legal a:focus-visible {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

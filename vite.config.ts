@@ -14,5 +14,7 @@ export default defineConfig(({ mode, command }) => {
     // host: true → reachable from your phone on the same Wi-Fi.
     server: { port: 5190, host: true },
     preview: { port: 5191, host: true },
+    // Three pages: the app, terms & privacy (legal.tryfermata.app), analytics (admin.tryfermata.app).
+    build: { rolldownOptions: { input: { main: "index.html", legal: "legal.html", admin: "admin.html" } } },
   };
 });

@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Fermata's terms of use and privacy policy." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Doto:wght,ROND@700..900,100&family=Inter+Tight:wght@300..600&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="/brand/favicon.png" />
+    <title>Fermata · Terms & Privacy</title>
+    <style>
+      :root {
+        --bg: #000;
+        --surface: #161616;
+        --line: #2a2a2a;
+        --ink: #f4f4f4;
+        --ink-2: rgba(244, 244, 244, 0.72);
+        --ink-3: rgba(244, 244, 244, 0.5);
+        --accent: #7fb1ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 80px;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 400 1.0625rem/1.65 "Inter Tight", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 3px;
+      }
+      header.top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px max(16px, env(safe-area-inset-left));
+        background: rgba(0, 0, 0, 0.82);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        border-bottom: 1px solid var(--line);
+      }
+      header.top img {
+        height: 26px;
+        width: auto;
+        display: block;
+      }
+      nav.tabs {
+        display: flex;
+        gap: 6px;
+      }
+      nav.tabs a {
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 0.95rem;
+        padding: 7px 14px;
+        border-radius: 999px;
+        background: var(--surface);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      nav.tabs a:hover,
+      nav.tabs a:focus-visible {
+        background: #222;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 40px 16px 96px;
+      }
+      /* The app's dot-matrix face for headings, numbers and dates. */
+      h1,
+      .dots,
+      .num,
+      .summary h2 {
+        font-family: "Doto", "Inter Tight", monospace;
+        font-weight: 900;
+        font-variation-settings: "ROND" 100;
+      }
+      h1 {
+        font-size: clamp(2.2rem, 8vw, 3.4rem);
+        letter-spacing: -0.02em;
+        line-height: 1.05;
+        margin: 0 0 10px;
+        text-wrap: balance;
+      }
+      .num {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--accent);
+        font-size: 1.6em;
+        line-height: 1;
+      }
+      .meta .dots {
+        color: var(--ink-2);
+        font-size: 1.1em;
+      }
+      footer .dots {
+        font-size: 1.2em;
+        color: var(--ink-2);
+      }
+      .meta {
+        color: var(--ink-3);
+        font-size: 0.95rem;
+        margin: 0 0 28px;
+      }
+      .summary {
+        background: var(--surface);
+        border-radius: 24px;
+        padding: 20px 22px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        margin: 0 0 40px;
+      }
+      .summary h2 {
+        margin-top: 0;
+        font-size: 1.35rem;
+      }
+      .summary ul {
+        margin: 0;
+        padding-left: 1.1em;
+      }
+      .summary li {
+        margin: 6px 0;
+        color: var(--ink-2);
+      }
+      .summary li strong {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      section.doc + section.doc {
+        margin-top: 72px;
+        padding-top: 48px;
+        border-top: 1px solid var(--line);
+      }
+      h2 {
+        font-size: 1.3rem;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        margin: 40px 0 10px;
+        text-wrap: balance;
+      }
+      h3 {
+        font-size: 1.05rem;
+        font-weight: 500;
+        margin: 26px 0 6px;
+      }
+      p,
+      li {
+        color: var(--ink-2);
+        text-wrap: pretty;
+      }
+      strong {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 0.95rem;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 10px 12px 10px 0;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink-2);
+      }
+      th {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      footer {
+        color: var(--ink-3);
+        font-size: 0.9rem;
+        margin-top: 72px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a href="https://tryfermata.app" aria-label="Fermata home"><img src="/brand/wordmark.png" alt="Fermata" /></a>
+      <nav class="tabs" aria-label="Sections">
+        <a href="#privacy">Privacy</a>
+        <a href="#terms">Terms</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Terms &amp; Privacy</h1>
+      <p class="meta">Last updated <span class="dots">17.10.2026</span></p>
+
+      <div class="summary">
+        <h2>The short version</h2>
+        <ul>
+          <li><strong>No accounts.</strong> You don't sign up, and we don't ask for your name or email.</li>
+          <li><strong>Your pages are read, then deleted.</strong> Photos and PDFs you send are used only to read the music and are deleted as soon as the reading is done.</li>
+          <li><strong>Your voice never leaves your device.</strong> The tuner, warm-ups and "sing this note" listen on your phone or computer. Nothing is recorded or uploaded.</li>
+          <li><strong>Your recent readings stay on your device.</strong> We don't keep a copy.</li>
+          <li><strong>Our analytics are anonymous.</strong> No cookies, no IP addresses stored, nothing that can follow you around.</li>
+          <li><strong>Fermata is free and provided as is.</strong> It does its best to read music correctly but can make mistakes.</li>
+        </ul>
+      </div>
+
+      <section class="doc" id="privacy">
+        <h1>Privacy policy</h1>
+        <p>
+          This policy explains what happens to your information when you use Fermata at tryfermata.app ("Fermata", "we", "us"). We built Fermata to collect as little
+          as possible.
+        </p>
+
+        <h2><span class="num">01</span>What you send us: sheet music</h2>
+        <p>
+          When you take a photo or choose a picture or PDF, it's sent over an encrypted connection to read the music. Before it leaves your device, the app crops the
+          photo to the music. Then:
+        </p>
+        <ul>
+          <li>Our music reader (running on Google Cloud in the United States) reads the notes.</li>
+          <li>
+            If our reader can't read the page, the page is sent to an AI service, <strong>Google Gemini</strong> or <strong>Groq</strong>, to read it instead. These
+            services process it under their own terms. On free plans Google may use content sent to Gemini to improve its services.
+          </li>
+          <li>The reading (the notes, plus the page image so it can light up the notes) is sent back to your device.</li>
+          <li>
+            Our servers <strong>delete your page and everything made from it as soon as the reading is finished</strong>. We don't keep your music and we don't look at
+            it.
+          </li>
+        </ul>
+        <p>Please don't upload pages with personal information written on them, and only upload music you have the right to use (see the Terms below).</p>
+
+        <h2><span class="num">02</span>Your microphone</h2>
+        <p>
+          The tuner, warm-ups and "sing this note" use your microphone to hear the pitch you're singing. This happens entirely on your device. Your voice is never
+          recorded to a file, never uploaded, and never stored. You can turn microphone access off at any time in your browser or phone settings.
+        </p>
+
+        <h2><span class="num">03</span>What stays on your device</h2>
+        <ul>
+          <li><strong>Recent readings:</strong> your last three readings (the music and page images) are saved in your browser so you can reopen them. Remove one with its × button, or clear your browser's site data to remove them all.</li>
+          <li><strong>Settings:</strong> small preferences such as your voice range for warm-ups.</li>
+        </ul>
+        <p>These never leave your device, and we can't see them.</p>
+
+        <h2><span class="num">04</span>Anonymous analytics</h2>
+        <p>To understand how Fermata is used and fix what breaks, we count a few things. Our analytics:</p>
+        <ul>
+          <li>use <strong>no cookies</strong> and no tracking across other sites;</li>
+          <li>count visits and which features are used (for example "opened the tuner" or "a reading failed");</li>
+          <li>note the <strong>country</strong> (worked out from your connection, which is then discarded), the <strong>type of device</strong> (phone, tablet or computer) and the <strong>website that linked you</strong> (just its name, such as instagram.com);</li>
+          <li>
+            count unique visitors with a code that is made from your connection details and <strong>changes every day</strong>, so it can't identify you or link your
+            visits across days. Your IP address itself is never stored.
+          </li>
+        </ul>
+        <p>When a reading fails we keep a short note of the error message and how long it took, never the page itself. Analytics are kept for up to 13 months.</p>
+
+        <h2><span class="num">05</span>Services we use</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>What for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Vercel</td>
+                <td>Hosting the app and passing your page to the reader.</td>
+              </tr>
+              <tr>
+                <td>Google Cloud</td>
+                <td>Running our music reader.</td>
+              </tr>
+              <tr>
+                <td>Google Gemini, Groq</td>
+                <td>AI reading when our reader can't read a page.</td>
+              </tr>
+              <tr>
+                <td>Upstash</td>
+                <td>Storing the anonymous analytics counts.</td>
+              </tr>
+              <tr>
+                <td>Google Fonts</td>
+                <td>The app's typefaces. Your browser downloads them from Google, which sees your IP address when it does.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Some of these services are in the United States, so your information may be processed there.</p>
+
+        <h2><span class="num">06</span>What we don't do</h2>
+        <p>We don't sell or share your information, show ads, build profiles, or use your music or voice to train AI.</p>
+
+        <h2><span class="num">07</span>Children</h2>
+        <p>
+          Fermata is made for singers of all ages and asks for no personal information. If you're under the age where your country allows you to agree to online
+          services yourself, please use Fermata with a parent's or guardian's permission.
+        </p>
+
+        <h2><span class="num">08</span>Your choices and rights</h2>
+        <p>
+          Because we don't keep your pages or your voice and our analytics can't identify you, there's normally nothing about you for us to hand over or delete. You can
+          clear your recent readings from your device at any time. If you have a question or request, contact us at the address below and we'll help.
+        </p>
+
+        <h2><span class="num">09</span>Changes</h2>
+        <p>If we change this policy we'll update it here and change the date at the top. If we ever start collecting something new, we'll say so clearly in the app first.</p>
+      </section>
+
+      <section class="doc" id="terms">
+        <h1>Terms of use</h1>
+        <p>By using Fermata you agree to these terms. If you don't agree, please don't use it.</p>
+
+        <h2><span class="num">01</span>What Fermata is</h2>
+        <p>
+          Fermata is a free tool for singers. It reads photos and PDFs of sheet music and plays them on piano, and it includes a tuner, vocal warm-ups and pitch
+          coaching. We may change, add or remove features, or pause the service, at any time.
+        </p>
+
+        <h2><span class="num">02</span>Readings can be wrong</h2>
+        <p>
+          Reading music from a photo is hard. Fermata (and the AI it sometimes uses) can misread notes, rhythms, tempo or markings, especially on unclear, handwritten or
+          crumpled pages. Always check important passages against your score, your teacher or your director. Warm-up scores and feedback are a practice aid, not a
+          professional assessment.
+        </p>
+
+        <h2><span class="num">03</span>Your music and copyright</h2>
+        <ul>
+          <li>Only upload sheet music you have the right to use, for example music you own a copy of, public-domain music, or music you have permission to use.</li>
+          <li>You keep all rights to what you upload. You let us process it only to give you your reading, and we delete it straight after.</li>
+          <li>Fermata is for your own practice. Don't use it to copy, share or distribute music in a way that breaks copyright.</li>
+        </ul>
+
+        <h2><span class="num">04</span>Fair use of the service</h2>
+        <p>Please don't:</p>
+        <ul>
+          <li>upload anything illegal, harmful, or unrelated to music;</li>
+          <li>try to overload, break into, reverse-engineer or disrupt Fermata or its servers;</li>
+          <li>use automated tools to send large numbers of pages or scrape the service.</li>
+        </ul>
+        <p>We may block access that breaks these rules.</p>
+
+        <h2><span class="num">05</span>Our work</h2>
+        <p>
+          The Fermata name, logo, design and software belong to us. The piano sound is the
+          <a href="https://archive.org/details/SalamanderGrandPianoV3">Salamander Grand Piano</a> by Alexander Holm, used under the CC BY 3.0 licence, and Fermata uses
+          open-source software including Audiveris, OpenSheetMusicDisplay, Tone.js and pitchy under their own licences.
+        </p>
+
+        <h2><span class="num">06</span>No warranty</h2>
+        <p>
+          Fermata is provided free, "as is" and "as available", without warranties of any kind, including that it will be accurate, uninterrupted or error-free, as far
+          as the law allows.
+        </p>
+
+        <h2><span class="num">07</span>Limitation of liability</h2>
+        <p>
+          As far as the law allows, we aren't liable for any indirect or consequential loss, or for any loss arising from using or not being able to use Fermata, such as
+          a misread note before a performance. Nothing in these terms limits rights you have under consumer law that can't be limited.
+        </p>
+
+        <h2><span class="num">08</span>Changes to these terms</h2>
+        <p>We may update these terms. The date at the top shows when they last changed. If you keep using Fermata after a change, the new terms apply.</p>
+      </section>
+
+      <section class="doc" id="contact">
+        <h2>Contact</h2>
+        <p>Questions about these terms or your privacy: <a href="mailto:hello@tryfermata.app">hello@tryfermata.app</a></p>
+      </section>
+
+      <footer><span class="dots">fermata</span> · © 2026</footer>
+    </main>
+  </body>
+</html>

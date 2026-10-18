@@ -13,5 +13,37 @@
       "source": "/api/read/:path*",
       "destination": "/api/reader?path=:path*"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/privacy",
+      "destination": "https://legal.tryfermata.app/#privacy",
+      "permanent": false
+    },
+    {
+      "source": "/terms",
+      "destination": "https://legal.tryfermata.app/#terms",
+      "permanent": false
+    },
+    {
+      "source": "/legal",
+      "destination": "https://legal.tryfermata.app/",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/admin.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
   ]
 }

@@ -18,6 +18,7 @@ import { prefetchPiano } from "./audio/piano";
 import { applyCheck, mergeScores, transcriptionToXml } from "./music/xml";
 import { ScoreScreen, type ScoreInfo } from "./ScoreScreen";
 import { preparePhoto } from "./photo/prepare.ts";
+import { track } from "./analytics";
 import { listRecent, openRecent, removeRecent, saveRecent, type Recent } from "./recent";
 import { TunerTab } from "./TunerTab";
 import { WarmupsTab } from "./WarmupsTab";
@@ -57,12 +58,14 @@ export function App() {
   const refreshRecent = () => void listRecent().then(setRecent);
 
   useEffect(() => {
+    track("view");
     refreshRecent();
     getStatus().then(setStatus, () => setStatus(null));
     void prefetchPiano().catch(() => undefined);
   }, []);
 
   const read = (file: File) => {
+    track("upload");
     setError(null);
     const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
     // Show the reading screen straight away; the upload (and, on Vercel, the whole reading)
@@ -94,6 +97,7 @@ export function App() {
   };
 
   const openSample = async () => {
+    track("sample");
     const xml = await fetch("/twinkle-twinkle.musicxml").then((r) => r.text());
     setScreen({ kind: "score", xml, info: { title: "Twinkle, Twinkle, Little Star", source: "sample" } });
   };
@@ -154,11 +158,15 @@ export function App() {
         error={error}
         onFile={read}
         onSample={openSample}
-        onCamera={() => setCamera(true)}
+        onCamera={() => {
+          track("camera");
+          setCamera(true);
+        }}
         readingOpen={READING_OPEN}
         onClosed={() => setRenovation((n) => n + 1)}
         recent={recent}
         onRecent={(r) => {
+          track("recent");
           setError(null);
           setScreen({ kind: "score", ...openRecent(r) });
         }}
@@ -185,7 +193,15 @@ export function App() {
   return (
     <div className={showTabs ? "has-tabs" : ""}>
       {page}
-      {showTabs ? <TabBar tab={tab} onTab={setTab} /> : null}
+      {showTabs ? (
+        <TabBar
+          tab={tab}
+          onTab={(t) => {
+            if (t !== tab && t !== "play") track(t);
+            setTab(t);
+          }}
+        />
+      ) : null}
       {renovation ? (
         <Renovation
           key={renovation}
@@ -353,6 +369,9 @@ function Home({
           {error}
         </p>
       ) : null}
+      <p className="home-legal">
+        <a href="https://legal.tryfermata.app">Terms &amp; Privacy</a>
+      </p>
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
       <input ref={files} type="file" accept="application/pdf,image/*" hidden onChange={pick} />
     </main>

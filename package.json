@@ -14,6 +14,7 @@
   "type": "module",
   "dependencies": {
     "@oreo-design/avatar": "^0.1.0",
+    "@vercel/functions": "^3.10.1",
     "fflate": "^0.8.3",
     "opensheetmusicdisplay": "^2.2.1",
     "pitchy": "^4.1.0",

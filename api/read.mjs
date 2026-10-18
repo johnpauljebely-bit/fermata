@@ -2,6 +2,7 @@
 // so this answers when it's done instead of handing out a job id to poll).
 // The app shrinks photos before sending them; Vercel accepts up to 4.5 MB per request.
 import { aiProviders, askAI } from "../server/ai.mjs";
+import { trackReading } from "../server/analytics.mjs";
 
 
 function sniff(b) {
@@ -18,17 +19,38 @@ const done = (body, status = 200) => Response.json(body, { status, headers: { "C
 const READER = (process.env.READER_URL ?? "").replace(/\/$/, "");
 
 export async function POST(request) {
-  // A hosted reader (Audiveris on Google Cloud Run) is configured: it reads the page within
-  // this one request and answers with the finished reading, page images included.
-  if (READER) {
-    const res = await fetch(`${READER}/api/read-sync${new URL(request.url).search}`, {
-      method: "POST",
-      headers: { "x-fermata-key": process.env.READER_SECRET ?? "", "Content-Type": "application/octet-stream" },
-      body: await request.arrayBuffer(),
-    });
-    return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-  }
   const started = Date.now();
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  // A hosted reader (Audiveris on Google Cloud Run) is configured: it reads the page within
+  // this one request and answers with the finished reading, page images included. If it
+  // can't read the page, the AI below transcribes it instead.
+  if (READER) {
+    try {
+      const res = await fetch(`${READER}/api/read-sync${new URL(request.url).search}`, {
+        method: "POST",
+        headers: { "x-fermata-key": process.env.READER_SECRET ?? "", "Content-Type": "application/octet-stream" },
+        body: bytes,
+        signal: AbortSignal.timeout(200_000), // leave time for the AI
+      });
+      const reading = await res.json().catch(() => null);
+      if (reading?.state === "done") {
+        await trackReading(request, { ok: true, how: "reader", kind: kindOf(bytes), seconds: (Date.now() - started) / 1000 });
+        return done(reading);
+      }
+      console.log(`Reader couldn't read it (${reading?.error ?? res.status}); asking the AI`);
+    } catch (error) {
+      console.log(`Reader unavailable (${error.message}); asking the AI`);
+    }
+  }
+  const answer = await transcribe(request, bytes, started);
+  const body = await answer.clone().json().catch(() => ({}));
+  await trackReading(request, { ok: body.state === "done", how: body.state === "done" ? "ai" : "none", kind: kindOf(bytes), seconds: (Date.now() - started) / 1000, error: body.error });
+  return answer;
+}
+
+const kindOf = (bytes) => (sniff(bytes) === "application/pdf" ? "pdf" : "photo");
+
+async function transcribe(request, bytes, started) {
   const keys = { geminiKey: process.env.GEMINI_API_KEY, groqKey: process.env.GROQ_API_KEY };
   const providers = aiProviders(keys);
   if (!providers.gemini && !providers.groq) {
@@ -36,7 +58,6 @@ export async function POST(request) {
   }
   // Fermata's page reader (in the browser) sends how many lines and bars the page has.
   const hint = (new URL(request.url).searchParams.get("hint") ?? "").slice(0, 2000);
-  const bytes = new Uint8Array(await request.arrayBuffer());
   const mime = sniff(bytes);
   if (!mime) return done({ error: "That isn't a photo or a PDF." }, 415);
   if (mime === "application/pdf" && !providers.gemini) return done({ error: "Reading PDFs needs a Gemini key. Send a photo instead." }, 415);

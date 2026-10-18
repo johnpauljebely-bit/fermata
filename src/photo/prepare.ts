@@ -79,10 +79,10 @@ export async function preparePhoto(file: Blob): Promise<Blob | null> {
     if (staves.length >= 3 && x1 - x0 > lw * 0.25 && y1 - y0 > lh * 0.1) crop = { x: x0 / look, y: y0 / look, w: (x1 - x0) / look, h: (y1 - y0) / look };
   }
 
-  // 3. Scale so the staff lines are ~TARGET_SPACE apart (or, if we found none, as big as we can).
-  let k = space ? TARGET_SPACE / space : Infinity;
+  // 3. Scale so the staff lines are ~TARGET_SPACE apart (if we found none, keep the photo's size).
+  // Only ever enlarge: a misread spacing must never shrink a good photo into a tiny one.
+  let k = space ? Math.max(1, TARGET_SPACE / space) : 1;
   k = Math.min(k, MAX_SIDE / Math.max(crop.w, crop.h), Math.sqrt(MAX_PIXELS / (crop.w * crop.h)));
-  if (!space) k = Math.min(k, 1); // nothing to aim for: keep the photo's own resolution
   const ow = Math.max(1, Math.round(crop.w * k));
   const oh = Math.max(1, Math.round(crop.h * k));
 

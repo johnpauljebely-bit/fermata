@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { track } from "./analytics";
 import { stop } from "./audio/player";
 import { pitchFromMidi } from "./music/pitch";
 import { BackButton, PillButton, Toggle } from "./ui";
@@ -173,6 +174,7 @@ function Session({ ex, range, onBack }: { ex: ExerciseDef; range: RangeId; onBac
         picked={picked}
         onStatus={setStatus}
         onFinished={(samples) => {
+          track("warmup_done");
           const r = buildReview(plan, samples);
           setReview(r.notes.length ? r : null);
         }}
