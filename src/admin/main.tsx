@@ -122,9 +122,8 @@ function Setup() {
       <h2>Connect analytics storage</h2>
       <p>You're signed in, but there's nowhere to keep the numbers yet.</p>
       <ol>
-        <li>In Vercel, open the Fermata project → <strong>Storage</strong> → <strong>Create Database</strong> → <strong>Upstash for Redis</strong> (free plan).</li>
-        <li>Connect it to the project for all environments. Vercel adds the keys for you.</li>
-        <li>Redeploy. Visits start counting from then on.</li>
+        <li>The numbers live in Firestore on Google Cloud (fermata-stats service), reached with <strong>READER_SECRET</strong>.</li>
+        <li>Check that READER_SECRET is set in Vercel, then redeploy.</li>
       </ol>
     </section>
   );
@@ -152,7 +151,7 @@ function Dashboard({ s }: { s: Stats }) {
   return (
     <>
       <section className="tiles">
-        <Tile label="Visitors" value={fmt(s.visitors)} foot={`unique, last ${s.days} days`} />
+        <Tile label="Visitors" value={fmt(s.visitors)} foot={`daily uniques, last ${s.days} days`} />
         <Tile label="Visits" value={fmt(n(t.view))} foot="app opens" />
         <Tile label="Readings" value={fmt(reads)} foot={rate === null ? "none yet" : `${rate}% read OK`} />
         <Tile label="Reading time" value={avg === null ? "–" : `${avg}s`} foot="average" />
